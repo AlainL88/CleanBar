@@ -1,12 +1,11 @@
 import Cocoa
 import SwiftUI
 
-/// Single status item controller managing the permanent CleanBar Eye icon, floating bar-shelf, and popover launchers.
+/// Single status item controller managing the permanent CleanBar Eye icon and dynamic menu bar spacer.
 @MainActor
 public final class MenuBarSpacerController: NSObject {
     public private(set) var statusItem: NSStatusItem?
     public private(set) var isExpanded: Bool = false
-    public private(set) var floatingBarController = FloatingBarController()
     public var onToggle: ((Bool) -> Void)?
     public var isPopoverShown: Bool {
         return preferencesPopover?.isShown == true
@@ -14,6 +13,7 @@ public final class MenuBarSpacerController: NSObject {
     private var preferencesPopover: NSPopover?
     private weak var observer: StatusBarObserver?
     private weak var stateStore: StateStore?
+    private let eyeImageView = NSImageView()
 
     public init(observer: StatusBarObserver? = nil, stateStore: StateStore? = nil) {
         self.observer = observer
@@ -31,12 +31,26 @@ public final class MenuBarSpacerController: NSObject {
         // Create 1 single, permanent status item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: "CleanBar")
+            button.image = nil
             button.target = self
             button.action = #selector(handleStatusItemClick(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+
+            // Configure eyeImageView pinned firmly to the trailing (right) edge
+            eyeImageView.translatesAutoresizingMaskIntoConstraints = false
+            eyeImageView.imageScaling = .scaleProportionallyDown
+            eyeImageView.contentTintColor = .labelColor
+            eyeImageView.image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: "CleanBar")
+
+            button.addSubview(eyeImageView)
+            NSLayoutConstraint.activate([
+                eyeImageView.trailingAnchor.constraint(equalTo: button.trailingAnchor),
+                eyeImageView.widthAnchor.constraint(equalToConstant: 24.0),
+                eyeImageView.topAnchor.constraint(equalTo: button.topAnchor),
+                eyeImageView.bottomAnchor.constraint(equalTo: button.bottomAnchor)
+            ])
         }
-        // Initial state: expanded to 24.0
+        // Initial state: 24.0
         statusItem?.length = 24.0
     }
 
@@ -130,16 +144,16 @@ public final class MenuBarSpacerController: NSObject {
         onToggle?(isExpanded)
     }
 
-    /// Dynamically calculates the exact collapse length needed to fill the gap
-    /// between CleanBar's Eye icon and the left menu boundary/notch.
-    public func calculateAvailableGap() -> CGFloat {
-        guard let buttonWindow = statusItem?.button?.window,
-              let screen = buttonWindow.screen ?? NSScreen.main else {
-            return 600.0
+    public func setExpanded(_ expanded: Bool, hiddenItemsCount: Int = 0, style: BarShelfStyle = .auto) {
+        guard let button = statusItem?.button,
+              let window = button.window,
+              let screen = window.screen ?? NSScreen.main else {
+            return
         }
 
-        let eyeX = buttonWindow.frame.origin.x
-
+        // When expanded, length is 24px (eye icon only).
+        // When collapsed, calculate exact gap from the eye's right edge to the app menu boundary:
+        let rightEdgeX = window.frame.maxX
         var leftBoundaryX: CGFloat = 350.0
         if #available(macOS 12.0, *) {
             if let auxiliaryTopLeftArea = screen.auxiliaryTopLeftArea, auxiliaryTopLeftArea.width > 0 {
@@ -147,46 +161,20 @@ public final class MenuBarSpacerController: NSObject {
             }
         }
 
-        return eyeX - leftBoundaryX
-    }
-
-    public func setExpanded(_ expanded: Bool, hiddenItemsCount: Int = 0, style: BarShelfStyle = .auto) {
-        let gap = calculateAvailableGap()
-        let isSpaceTight = (gap < 450.0)
-
-        let useFloatingPanel: Bool = {
-            switch style {
-            case .inline:
-                return false
-            case .floating:
-                return true
-            case .auto:
-                return isSpaceTight
-            }
-        }()
-
-        let collapseLength = max(400.0, min(gap, (NSScreen.main?.frame.width ?? 1400.0) - 350.0))
+        let maxGap = rightEdgeX - leftBoundaryX
+        let collapseLength: CGFloat = max(350.0, min(maxGap, screen.frame.width - 350.0))
         let targetLength: CGFloat = expanded ? 24.0 : collapseLength
 
         guard self.isExpanded != expanded || statusItem?.length != targetLength else { return }
         self.isExpanded = expanded
 
-        guard let button = statusItem?.button else { return }
-
-        button.image = NSImage(
+        eyeImageView.image = NSImage(
             systemSymbolName: expanded ? "eye.fill" : "eye.slash",
             accessibilityDescription: "CleanBar"
         )
 
         if statusItem?.length != targetLength {
             statusItem?.length = targetLength
-        }
-
-        // Floating Bar-Shelf handling
-        if expanded && useFloatingPanel {
-            floatingBarController.setVisible(true, relativeTo: button)
-        } else {
-            floatingBarController.setVisible(false, relativeTo: button)
         }
     }
 }
