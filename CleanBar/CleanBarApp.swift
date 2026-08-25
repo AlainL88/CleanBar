@@ -10,42 +10,46 @@ import Cocoa
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    public let stateStore = StateStore()
-    public let observer: StatusBarObserver
-    public let layoutController = LayoutController()
-    public let hoverMonitor = HoverMonitor()
-
-    override init() {
-        let store = StateStore()
-        let obs = StatusBarObserver(stateStore: store)
-        self.observer = obs
-        super.init()
-    }
+    public var stateStore: StateStore?
+    public var observer: StatusBarObserver?
+    public var layoutController: LayoutController?
+    public var hoverMonitor: HoverMonitor?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
 
-        // Configure status items and floating shelf
-        layoutController.spacerController.configure(observer: observer, stateStore: stateStore)
+        let store = StateStore()
+        let obs = StatusBarObserver(stateStore: store)
+        let layout = LayoutController()
+        let hover = HoverMonitor()
+
+        self.stateStore = store
+        self.observer = obs
+        self.layoutController = layout
+        self.hoverMonitor = hover
+
+        // Explicitly setup status item in applicationDidFinishLaunching
+        layout.spacerController.setupStatusItem()
+        layout.spacerController.configure(observer: obs, stateStore: store)
 
         // Connect hover detection
-        hoverMonitor.onHoverChanged = { [weak self] isHovered in
-            guard let self = self else { return }
-            self.layoutController.applyVisibility(isHovered: isHovered, observer: self.observer)
+        hover.onHoverChanged = { [weak self] isHovered in
+            guard let self = self, let observer = self.observer else { return }
+            self.layoutController?.applyVisibility(isHovered: isHovered, observer: observer)
         }
 
-        observer.onItemsUpdated = { [weak self] in
-            guard let self = self else { return }
-            self.layoutController.applyVisibility(isHovered: self.hoverMonitor.isCurrentlyHovered, observer: self.observer)
+        obs.onItemsUpdated = { [weak self] in
+            guard let self = self, let observer = self.observer, let hover = self.hoverMonitor else { return }
+            self.layoutController?.applyVisibility(isHovered: hover.isCurrentlyHovered, observer: observer)
         }
 
-        hoverMonitor.startMonitoring()
-        observer.scanMenuBarItems()
-        layoutController.applyVisibility(isHovered: false, observer: observer)
+        hover.startMonitoring()
+        obs.scanMenuBarItems()
+        layout.applyVisibility(isHovered: false, observer: obs)
 
-        if !stateStore.hasCompletedOnboarding {
+        if !store.hasCompletedOnboarding {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.layoutController.spacerController.openOnboarding()
+                self?.layoutController?.spacerController.openOnboarding()
             }
         }
     }
@@ -57,7 +61,11 @@ struct CleanBarApp: App {
 
     var body: some Scene {
         Settings {
-            SettingsView(observer: appDelegate.observer, stateStore: appDelegate.stateStore)
+            if let obs = appDelegate.observer, let store = appDelegate.stateStore {
+                SettingsView(observer: obs, stateStore: store)
+            } else {
+                EmptyView()
+            }
         }
     }
 }

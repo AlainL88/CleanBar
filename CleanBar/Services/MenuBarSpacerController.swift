@@ -21,7 +21,6 @@ public final class MenuBarSpacerController: NSObject {
         self.observer = observer
         self.stateStore = stateStore
         super.init()
-        setupStatusItem()
         if let obs = observer {
             floatingShelf.configure(observer: obs, onOpenPreferences: { [weak self] in
                 self?.openPreferences()
@@ -37,7 +36,8 @@ public final class MenuBarSpacerController: NSObject {
         })
     }
 
-    private func setupStatusItem() {
+    public func setupStatusItem() {
+        guard statusItem == nil else { return }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
             let symbolConfig = NSImage.SymbolConfiguration(pointSize: 14.0, weight: .medium)

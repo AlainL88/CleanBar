@@ -15,5 +15,8 @@ pkill -x CleanBar 2>/dev/null || true
 rm -rf /Applications/CleanBar.app 2>/dev/null || sudo rm -rf /Applications/CleanBar.app 2>/dev/null || true
 cp -R "$BUILD_APP_PATH" /Applications/
 
+# Sign ad-hoc to satisfy macOS Gatekeeper and launchd
+codesign --force --deep --sign - /Applications/CleanBar.app 2>/dev/null || true
+
 echo "✅ CleanBar installata con successo in /Applications/CleanBar.app"
 open /Applications/CleanBar.app
