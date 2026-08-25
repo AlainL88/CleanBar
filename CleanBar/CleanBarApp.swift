@@ -6,27 +6,57 @@
 //
 
 import SwiftUI
-import SwiftData
 
 @main
 struct CleanBarApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+    @StateObject private var observer: StatusBarObserver
+    private let stateStore: StateStore
+    private let hoverMonitor: HoverMonitor
+    private let layoutController: LayoutController
 
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+    init() {
+        // Set activation policy to accessory (menu bar app without dock icon)
+        NSApplication.shared.setActivationPolicy(.accessory)
+        let store = StateStore()
+        let obs = StatusBarObserver(stateStore: store)
+        let layout = LayoutController()
+        let hover = HoverMonitor()
+
+        self._observer = StateObject(wrappedValue: obs)
+        self.stateStore = store
+        self.hoverMonitor = hover
+        self.layoutController = layout
+
+        // Configure single unified status item
+        layout.spacerController.configure(observer: obs, stateStore: store)
+
+        // Connect hover detection to visibility controller
+        hover.onHoverChanged = { [weak obs] isHovered in
+            guard let obs = obs else { return }
+            layout.applyVisibility(isHovered: isHovered, observer: obs)
         }
-    }()
+
+        // Automatically enforce collapsed visibility on startup when items are scanned
+        obs.onItemsUpdated = { [weak obs] in
+            guard let obs = obs else { return }
+            layout.applyVisibility(isHovered: hover.isCurrentlyHovered, observer: obs)
+        }
+
+        hover.startMonitoring()
+        obs.scanMenuBarItems()
+        layout.applyVisibility(isHovered: false, observer: obs)
+
+        // Launch onboarding automatically on first launch
+        if !store.hasCompletedOnboarding {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                layout.spacerController.openOnboarding()
+            }
+        }
+    }
 
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        Settings {
+            SettingsView(observer: observer, stateStore: stateStore)
         }
-        .modelContainer(sharedModelContainer)
     }
 }
