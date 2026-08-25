@@ -129,16 +129,36 @@ public final class MenuBarSpacerController: NSObject {
         onToggle?(isExpanded)
     }
 
-    public func setExpanded(_ expanded: Bool, hiddenItemsCount: Int = 0) {
-        let screen = NSScreen.main
-        let screenWidth = screen?.frame.width ?? 1400.0
-        let visibleWidth = screen?.visibleFrame.width ?? screenWidth
+    /// Dynamically calculates the exact collapse length needed to fill the gap
+    /// between CleanBar's Eye icon and the left menu boundary/notch.
+    private func calculateDynamicCollapseLength() -> CGFloat {
+        guard let buttonWindow = statusItem?.button?.window,
+              let screen = buttonWindow.screen ?? NSScreen.main else {
+            return 600.0
+        }
 
-        // Dynamic length calculation:
-        // When expanded (hovering): 24.0 (Eye icon width)
-        // When collapsed (not hovering): calculate safe spacer width based on screen width (~200px - 320px)
-        let safeCollapseLength: CGFloat = min(320.0, max(180.0, visibleWidth * 0.20))
-        let targetLength: CGFloat = expanded ? 24.0 : safeCollapseLength
+        let eyeX = buttonWindow.frame.origin.x
+        let screenWidth = screen.frame.width
+
+        // Left boundary is the end of app menu (typically ~350px - 450px) or notch left edge
+        var leftBoundaryX: CGFloat = 350.0
+
+        if #available(macOS 12.0, *) {
+            if let auxiliaryTopLeftArea = screen.auxiliaryTopLeftArea, auxiliaryTopLeftArea.width > 0 {
+                leftBoundaryX = max(leftBoundaryX, auxiliaryTopLeftArea.width)
+            }
+        }
+
+        // Available gap between CleanBar's Eye icon position and the left menu boundary
+        let gap = eyeX - leftBoundaryX
+
+        // Safe dynamic length: fills the exact gap (minimum 400px, up to exact gap size)
+        return max(400.0, min(gap, screenWidth - 350.0))
+    }
+
+    public func setExpanded(_ expanded: Bool, hiddenItemsCount: Int = 0) {
+        let collapseLength = calculateDynamicCollapseLength()
+        let targetLength: CGFloat = expanded ? 24.0 : collapseLength
 
         guard self.isExpanded != expanded || statusItem?.length != targetLength else { return }
         self.isExpanded = expanded
