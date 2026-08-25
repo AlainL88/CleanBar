@@ -250,29 +250,52 @@ public final class StatusBarObserver: ObservableObject {
         var itemIDs: [String] = []
         let selfBundleID = Bundle.main.bundleIdentifier
 
-        // 1. Scan running background/accessory applications (which host menu bar icons)
-        for runningApp in NSWorkspace.shared.runningApplications {
-            let pid = runningApp.processIdentifier
-            guard pid != ProcessInfo.processInfo.processIdentifier else { continue }
-            if let bundleID = runningApp.bundleIdentifier, bundleID == selfBundleID { continue }
+        let ignoredBundlePrefixes = [
+            "com.apple.speech",
+            "com.apple.corespeechd",
+            "com.apple.bird",
+            "com.apple.cloudd",
+            "com.apple.WebKit",
+            "com.apple.telephonyutilities",
+            "com.apple.CallHistory",
+            "com.apple.CoreLocation",
+            "com.apple.mediaremoteagent",
+            "com.apple.audio",
+            "com.apple.quicklook"
+        ]
 
-            if runningApp.activationPolicy == .accessory {
-                if let id = runningApp.bundleIdentifier ?? runningApp.localizedName, !id.isEmpty {
-                    if !itemIDs.contains(id) {
+        if isAccessibilityTrusted {
+            for runningApp in NSWorkspace.shared.runningApplications {
+                let pid = runningApp.processIdentifier
+                guard pid != ProcessInfo.processInfo.processIdentifier else { continue }
+                if let bundleID = runningApp.bundleIdentifier {
+                    if bundleID == selfBundleID { continue }
+                    if ignoredBundlePrefixes.contains(where: { bundleID.hasPrefix($0) }) { continue }
+                }
+
+                let app = AXUIElementCreateApplication(pid)
+                if hasStatusItem(app: app) {
+                    if let id = resolveIdentifier(for: app, runningApp: runningApp), !itemIDs.contains(id) {
                         itemIDs.append(id)
                     }
                 }
             }
         }
 
-        // 2. Scan AX status items if accessibility permission is granted
-        if isAccessibilityTrusted {
-            for runningApp in NSWorkspace.shared.runningApplications {
-                let pid = runningApp.processIdentifier
-                guard pid != ProcessInfo.processInfo.processIdentifier else { continue }
-                let app = AXUIElementCreateApplication(pid)
-                if hasStatusItem(app: app) {
-                    if let id = resolveIdentifier(for: app, runningApp: runningApp), !itemIDs.contains(id) {
+        // Also check running accessory applications that have active window/UI (not pure daemon)
+        for runningApp in NSWorkspace.shared.runningApplications {
+            let pid = runningApp.processIdentifier
+            guard pid != ProcessInfo.processInfo.processIdentifier else { continue }
+            if let bundleID = runningApp.bundleIdentifier {
+                if bundleID == selfBundleID { continue }
+                if ignoredBundlePrefixes.contains(where: { bundleID.hasPrefix($0) }) { continue }
+            }
+
+            if runningApp.activationPolicy == .accessory && runningApp.icon != nil {
+                // If it's a known non-system utility app or user installed
+                if let bundleID = runningApp.bundleIdentifier, !bundleID.hasPrefix("com.apple.") {
+                    let id = bundleID
+                    if !itemIDs.contains(id) {
                         itemIDs.append(id)
                     }
                 }

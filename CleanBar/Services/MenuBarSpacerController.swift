@@ -150,14 +150,47 @@ public final class MenuBarSpacerController: NSObject {
         onToggle?(isExpanded)
     }
 
+    /// Calculates safe collapse length stopping strictly at the right edge of the MacBook notch or app menu boundary.
+    public func calculateSafeDistanceToNotch() -> CGFloat {
+        guard let button = statusItem?.button,
+              let window = button.window,
+              let screen = window.screen ?? NSScreen.main else {
+            return 280.0
+        }
+
+        let eyeRightX = window.frame.maxX
+        guard eyeRightX > 100.0 else {
+            return 280.0
+        }
+
+        var notchRightEdgeX: CGFloat = 400.0
+        if #available(macOS 12.0, *) {
+            if let topRightArea = screen.auxiliaryTopRightArea, topRightArea.width > 0 {
+                notchRightEdgeX = topRightArea.origin.x
+            } else if let topLeftArea = screen.auxiliaryTopLeftArea, topLeftArea.width > 0 {
+                notchRightEdgeX = topLeftArea.maxX
+            }
+        }
+
+        let distanceToNotch = eyeRightX - notchRightEdgeX
+        let safeDistance = max(80.0, min(distanceToNotch - 10.0, screen.frame.width - notchRightEdgeX))
+        return safeDistance
+    }
+
     public func setExpanded(_ expanded: Bool, hiddenItemsCount: Int = 0) {
-        guard self.isExpanded != expanded else { return }
+        let targetLength: CGFloat = expanded ? 24.0 : calculateSafeDistanceToNotch()
+
+        guard self.isExpanded != expanded || statusItem?.length != targetLength else { return }
         self.isExpanded = expanded
 
         eyeImageView.image = NSImage(
             systemSymbolName: expanded ? "eye.fill" : "eye.slash",
             accessibilityDescription: "CleanBar"
         )
+
+        if statusItem?.length != targetLength {
+            statusItem?.length = targetLength
+        }
 
         if expanded {
             floatingShelf.setVisible(true, relativeTo: statusItem?.button)
