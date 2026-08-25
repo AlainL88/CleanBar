@@ -35,6 +35,7 @@ public struct SettingsView: View {
                     Text("Organize and declutter your macOS menu bar.")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer()
@@ -43,7 +44,7 @@ public struct SettingsView: View {
             Divider()
 
             // General Settings Group
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text("General Settings")
                     .font(.headline)
                     .foregroundColor(.primary)
@@ -58,6 +59,7 @@ public struct SettingsView: View {
                             Text("Automatically start CleanBar when logging in.")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
 
                         Spacer()
@@ -77,6 +79,7 @@ public struct SettingsView: View {
                             Text(msg)
                                 .font(.caption)
                                 .foregroundColor(.orange)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(.top, 4)
                     }
@@ -86,39 +89,36 @@ public struct SettingsView: View {
                 .background(Color(NSColor.controlBackgroundColor))
                 .cornerRadius(10)
 
-                // Bar Presentation Style Card (Inline, Auto, Floating)
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .center) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Reveal Style")
-                                .font(.body)
-                                .bold()
-                            Text("Mode for displaying hidden status bar icons on hover.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        Spacer()
-
-                        Picker("", selection: Binding(
-                            get: { selectedStyle },
-                            set: { newStyle in
-                                selectedStyle = newStyle
-                                stateStore.barShelfStyle = newStyle
-                            }
-                        )) {
-                            ForEach(BarShelfStyle.allCases) { style in
-                                Text(style.displayName).tag(style)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .frame(width: 140)
+                // Bar Presentation Style Card
+                VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Reveal Style")
+                            .font(.body)
+                            .bold()
+                        Text("Choose how hidden menu bar icons are revealed on hover.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+
+                    Picker("", selection: Binding(
+                        get: { selectedStyle },
+                        set: { newStyle in
+                            selectedStyle = newStyle
+                            stateStore.barShelfStyle = newStyle
+                        }
+                    )) {
+                        ForEach(BarShelfStyle.allCases) { style in
+                            Text(style.displayName).tag(style)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
 
                     Text(selectedStyle.description)
                         .font(.caption2)
                         .foregroundColor(.secondary)
-                        .padding(.top, 2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -140,6 +140,7 @@ public struct SettingsView: View {
                         Text("Required to detect menu bar mouse movements.")
                             .font(.caption)
                             .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Spacer()
@@ -184,7 +185,7 @@ public struct SettingsView: View {
             }
         }
         .padding(20)
-        .frame(width: 440)
+        .frame(width: 460)
         .alert("Applications Folder Required", isPresented: $launchAtLoginService.showInstallationAlert) {
             Button("OK", role: .cancel) { }
         } message: {
