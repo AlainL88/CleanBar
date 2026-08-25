@@ -66,13 +66,16 @@ private struct FloatingShelfStatusItemTile: View {
 
                 if let icon = item.iconImage {
                     Image(nsImage: icon)
+                        .renderingMode(icon.isTemplate ? .template : .original)
                         .resizable()
                         .interpolation(.high)
                         .scaledToFit()
-                        .frame(width: max(18, item.frame.width - 4), height: 20)
+                        .foregroundColor(.primary)
+                        .frame(width: max(18, min(24, item.frame.width - 4)), height: 18)
                 } else {
                     Image(systemName: "menubar.rectangle")
                         .font(.system(size: 14))
+                        .foregroundColor(.primary)
                 }
             }
         }

@@ -14,7 +14,6 @@ public final class MenuBarSpacerController: NSObject {
     private var preferencesPopover: NSPopover?
     private weak var observer: StatusBarObserver?
     private weak var stateStore: StateStore?
-    private let eyeImageView = NSImageView()
 
     public init(observer: StatusBarObserver? = nil, stateStore: StateStore? = nil) {
         self.observer = observer
@@ -39,23 +38,14 @@ public final class MenuBarSpacerController: NSObject {
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: 24.0)
         if let button = statusItem?.button {
-            button.image = nil
+            let image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: "CleanBar")
+            image?.isTemplate = true
+            button.image = image
+            button.imagePosition = .imageOnly
+            button.imageScaling = .scaleProportionallyDown
             button.target = self
             button.action = #selector(handleStatusItemClick(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-
-            eyeImageView.translatesAutoresizingMaskIntoConstraints = false
-            eyeImageView.imageScaling = .scaleProportionallyDown
-            eyeImageView.contentTintColor = .labelColor
-            eyeImageView.image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: "CleanBar")
-
-            button.addSubview(eyeImageView)
-            NSLayoutConstraint.activate([
-                eyeImageView.trailingAnchor.constraint(equalTo: button.trailingAnchor),
-                eyeImageView.leadingAnchor.constraint(equalTo: button.leadingAnchor),
-                eyeImageView.topAnchor.constraint(equalTo: button.topAnchor),
-                eyeImageView.bottomAnchor.constraint(equalTo: button.bottomAnchor)
-            ])
         }
         statusItem?.length = 24.0
     }
@@ -89,7 +79,9 @@ public final class MenuBarSpacerController: NSObject {
         quitItem.target = self
         menu.addItem(quitItem)
 
-        statusItem?.popUpMenu(menu)
+        statusItem?.menu = menu
+        statusItem?.button?.performClick(nil)
+        statusItem?.menu = nil
     }
 
     @objc public func openPreferences() {
@@ -187,10 +179,15 @@ public final class MenuBarSpacerController: NSObject {
         guard self.isExpanded != expanded || statusItem?.length != targetLength else { return }
         self.isExpanded = expanded
 
-        eyeImageView.image = NSImage(
-            systemSymbolName: expanded ? "eye.fill" : "eye.slash",
-            accessibilityDescription: "CleanBar"
-        )
+        let symbolName = expanded ? "eye.fill" : "eye.slash"
+        let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "CleanBar")
+        image?.isTemplate = true
+
+        if let button = statusItem?.button {
+            button.image = image
+            button.imagePosition = expanded ? .imageOnly : .imageTrailing
+            button.needsDisplay = true
+        }
 
         if statusItem?.length != targetLength {
             statusItem?.length = targetLength
