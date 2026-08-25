@@ -15,8 +15,13 @@ pkill -x CleanBar 2>/dev/null || true
 rm -rf /Applications/CleanBar.app 2>/dev/null || sudo rm -rf /Applications/CleanBar.app 2>/dev/null || true
 cp -R "$BUILD_APP_PATH" /Applications/
 
-# Sign ad-hoc to satisfy macOS Gatekeeper and launchd
-codesign --force --deep --sign - /Applications/CleanBar.app 2>/dev/null || true
+# Sign with Developer Certificate for persistent macOS TCC Accessibility authorization
+DEV_ID="Apple Development: Alain Lima (Q6659PDF69)"
+if security find-identity -v -p codesigning | grep -q "Apple Development: Alain Lima"; then
+  codesign --force --deep --sign "Apple Development: Alain Lima (Q6659PDF69)" /Applications/CleanBar.app 2>/dev/null || codesign --force --deep --sign - /Applications/CleanBar.app 2>/dev/null || true
+else
+  codesign --force --deep --sign - /Applications/CleanBar.app 2>/dev/null || true
+fi
 
 echo "✅ CleanBar installata con successo in /Applications/CleanBar.app"
 open /Applications/CleanBar.app
