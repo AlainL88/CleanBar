@@ -32,9 +32,10 @@ public final class FloatingShelfController: NSObject {
               let observer = observer else { return }
 
         let buttonFrameInScreen = window.convertToScreen(button.frame)
-        let count = max(1, observer.discoveredItems.count)
-        let panelWidth = CGFloat(count * 34 + 54)
-        let panelHeight: CGFloat = 42.0
+        let count = max(1, observer.leftHiddenItems.count)
+        let itemsWidth = observer.leftHiddenItems.reduce(0.0) { $0 + max(28.0, $1.frame.width) }
+        let panelWidth = max(260.0, itemsWidth + 60.0)
+        let panelHeight: CGFloat = 38.0
 
         if panel == nil {
             let p = NSPanel(
@@ -56,7 +57,7 @@ public final class FloatingShelfController: NSObject {
 
             let hostingView = NSHostingView(rootView: shelfView)
             hostingView.wantsLayer = true
-            hostingView.layer?.cornerRadius = 10
+            hostingView.layer?.cornerRadius = 8
             hostingView.layer?.masksToBounds = true
 
             let visualEffect = NSVisualEffectView()
@@ -64,7 +65,7 @@ public final class FloatingShelfController: NSObject {
             visualEffect.material = .hudWindow
             visualEffect.state = .active
             visualEffect.wantsLayer = true
-            visualEffect.layer?.cornerRadius = 10
+            visualEffect.layer?.cornerRadius = 8
             visualEffect.layer?.masksToBounds = true
 
             visualEffect.addSubview(hostingView)
@@ -83,7 +84,7 @@ public final class FloatingShelfController: NSObject {
         // Align right edge of panel with right edge of the Eye icon
         let eyeRightX = buttonFrameInScreen.maxX
         let panelX = max(10.0, min(screen.frame.width - panelWidth - 10.0, eyeRightX - panelWidth))
-        let panelY = buttonFrameInScreen.minY - panelHeight - 6.0
+        let panelY = buttonFrameInScreen.minY - panelHeight - 4.0
 
         panel?.setFrame(NSRect(x: panelX, y: panelY, width: panelWidth, height: panelHeight), display: true)
         panel?.orderFrontRegardless()

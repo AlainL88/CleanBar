@@ -6,6 +6,8 @@ import Combine
 @MainActor
 public final class StatusBarObserver: ObservableObject {
     @Published public private(set) var discoveredItems: [ItemConfig] = []
+    @Published public private(set) var leftHiddenItems: [StatusItemModel] = []
+    @Published public private(set) var totalHiddenWidth: CGFloat = 120.0
     @Published public private(set) var isAccessibilityTrusted: Bool = false
     @Published public private(set) var temporarilyRevealedItemIDs: Set<String> = []
 
@@ -51,12 +53,14 @@ public final class StatusBarObserver: ObservableObject {
 
     private func startPermissionPolling() {
         permissionPollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            let trusted = AXIsProcessTrusted()
-            if self.isAccessibilityTrusted != trusted {
-                self.isAccessibilityTrusted = trusted
-                if trusted {
-                    self.scanMenuBarItems()
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                let trusted = AXIsProcessTrusted()
+                if self.isAccessibilityTrusted != trusted {
+                    self.isAccessibilityTrusted = trusted
+                    if trusted {
+                        self.scanMenuBarItems()
+                    }
                 }
             }
         }
@@ -72,13 +76,7 @@ public final class StatusBarObserver: ObservableObject {
             trusted = AXIsProcessTrusted()
         }
 
-        if Thread.isMainThread {
-            self.isAccessibilityTrusted = trusted
-        } else {
-            DispatchQueue.main.async {
-                self.isAccessibilityTrusted = trusted
-            }
-        }
+        self.isAccessibilityTrusted = trusted
         return trusted
     }
 
@@ -89,27 +87,41 @@ public final class StatusBarObserver: ObservableObject {
     }
 
     public func triggerTemporaryReveal(for id: String, duration: TimeInterval = 5.0) {
-        let updateBlock = {
-            self.revealTimers[id]?.invalidate()
-            self.temporarilyRevealedItemIDs.insert(id)
+        self.revealTimers[id]?.invalidate()
+        self.temporarilyRevealedItemIDs.insert(id)
 
-            let timer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { [weak self] _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { [weak self] _ in
+            DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.temporarilyRevealedItemIDs.remove(id)
                 self.revealTimers.removeValue(forKey: id)
             }
-            self.revealTimers[id] = timer
         }
-
-        if Thread.isMainThread {
-            updateBlock()
-        } else {
-            DispatchQueue.main.async(execute: updateBlock)
-        }
+        self.revealTimers[id] = timer
     }
 
     public func isTemporarilyRevealed(_ id: String) -> Bool {
         return temporarilyRevealedItemIDs.contains(id)
+    }
+
+    /// Triggers a status item by injecting a native CGEvent click at its on-screen center coordinates.
+    public func triggerStatusItem(_ item: StatusItemModel) {
+        if item.frame.width > 0 && item.frame.height > 0 {
+            let clickPoint = CGPoint(x: item.frame.midX, y: item.frame.midY)
+            let source = CGEventSource(stateID: .hidSystemState)
+            let mouseDown = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: clickPoint, mouseButton: .left)
+            let mouseUp = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: clickPoint, mouseButton: .left)
+            mouseDown?.post(tap: .cghidEventTap)
+            mouseUp?.post(tap: .cghidEventTap)
+            return
+        }
+
+        if let element = item.axElement {
+            AXUIElementPerformAction(element, kAXPressAction as CFString)
+            return
+        }
+
+        triggerItem(id: item.id)
     }
 
     /// Triggers the real status bar item via CGEvent click injection or Accessibility press action.
@@ -128,7 +140,6 @@ public final class StatusBarObserver: ObservableObject {
                    let children = childrenRef as? [AXUIElement],
                    let targetElement = children.first {
 
-                    // 1. Try resolving exact element position and sending native CGEvent mouse click
                     var posValue: CFTypeRef?
                     var sizeValue: CFTypeRef?
                     if AXUIElementCopyAttributeValue(targetElement, kAXPositionAttribute as CFString, &posValue) == .success,
@@ -148,7 +159,6 @@ public final class StatusBarObserver: ObservableObject {
                         }
                     }
 
-                    // 2. Accessibility AXPress fallback
                     if AXUIElementPerformAction(targetElement, kAXPressAction as CFString) == .success {
                         return
                     }
@@ -156,8 +166,93 @@ public final class StatusBarObserver: ObservableObject {
             }
         }
 
-        // 3. Application activation fallback
         app.activate()
+    }
+
+    /// Scans the system menu bar items located strictly to the LEFT of CleanBar's Eye icon.
+    public func scanLeftHiddenItems(cleanBarEyeX: CGFloat) {
+        guard isAccessibilityTrusted else { return }
+
+        var items: [StatusItemModel] = []
+        let selfBundleID = Bundle.main.bundleIdentifier
+
+        for runningApp in NSWorkspace.shared.runningApplications {
+            let pid = runningApp.processIdentifier
+            guard pid != ProcessInfo.processInfo.processIdentifier else { continue }
+            if let bundleID = runningApp.bundleIdentifier, bundleID == selfBundleID { continue }
+
+            let appElement = AXUIElementCreateApplication(pid)
+            var extrasMenuBar: CFTypeRef?
+            if AXUIElementCopyAttributeValue(appElement, "AXExtrasMenuBar" as CFString, &extrasMenuBar) == .success,
+               let extras = extrasMenuBar {
+                var childrenRef: CFTypeRef?
+                if AXUIElementCopyAttributeValue(extras as! AXUIElement, kAXChildrenAttribute as CFString, &childrenRef) == .success,
+                   let children = childrenRef as? [AXUIElement] {
+                    for child in children {
+                        var posValue: CFTypeRef?
+                        var sizeValue: CFTypeRef?
+                        if AXUIElementCopyAttributeValue(child, kAXPositionAttribute as CFString, &posValue) == .success,
+                           AXUIElementCopyAttributeValue(child, kAXSizeAttribute as CFString, &sizeValue) == .success,
+                           let posVal = posValue, let sizeVal = sizeValue {
+                            var point = CGPoint.zero
+                            var size = CGSize.zero
+                            if AXValueGetValue(posVal as! AXValue, .cgPoint, &point),
+                               AXValueGetValue(sizeVal as! AXValue, .cgSize, &size),
+                               size.width > 8, size.height > 8 {
+                                let rect = CGRect(origin: point, size: size)
+
+                                // Include only items located strictly to the LEFT of CleanBar's Eye icon
+                                if rect.maxX <= (cleanBarEyeX + 8.0) {
+                                    let appName = runningApp.localizedName ?? runningApp.bundleIdentifier ?? "Status Item"
+                                    let id = runningApp.bundleIdentifier ?? appName
+                                    let icon = resolveMenuIcon(for: runningApp)
+
+                                    items.append(StatusItemModel(
+                                        id: id,
+                                        appName: appName,
+                                        frame: rect,
+                                        iconImage: icon,
+                                        axElement: child
+                                    ))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sort items left-to-right
+        let sorted = items.sorted { $0.frame.minX < $1.frame.minX }
+        let totalW = sorted.reduce(0.0) { $0 + $1.frame.width }
+
+        self.leftHiddenItems = sorted
+        if totalW > 0 {
+            self.totalHiddenWidth = totalW
+        }
+        self.onItemsUpdated?()
+    }
+
+    private func resolveMenuIcon(for runningApp: NSRunningApplication?) -> NSImage? {
+        guard let app = runningApp, let bundleURL = app.bundleURL else {
+            return runningApp?.icon
+        }
+
+        let resourcesURL = bundleURL.appendingPathComponent("Contents/Resources")
+        if let enumerator = FileManager.default.enumerator(at: resourcesURL, includingPropertiesForKeys: nil) {
+            for case let fileURL as URL in enumerator {
+                let name = fileURL.deletingPathExtension().lastPathComponent.lowercased()
+                if (name.contains("status") || name.contains("menubar") || name.contains("tray") || name.contains("template"))
+                    && (fileURL.pathExtension == "pdf" || fileURL.pathExtension == "png" || fileURL.pathExtension == "icns") {
+                    if let image = NSImage(contentsOf: fileURL) {
+                        image.isTemplate = true
+                        return image
+                    }
+                }
+            }
+        }
+
+        return app.icon
     }
 
     @discardableResult
@@ -168,30 +263,16 @@ public final class StatusBarObserver: ObservableObject {
             let rawItemIDs = customScanner()
             let itemIDs = processItemIDs(rawItemIDs)
             let configs = itemIDs.map { ItemConfig(id: $0, category: self.stateStore.category(for: $0)) }
-            if Thread.isMainThread {
-                self.discoveredItems = configs
-                self.onItemsUpdated?()
-            } else {
-                DispatchQueue.main.sync {
-                    self.discoveredItems = configs
-                    self.onItemsUpdated?()
-                }
-            }
+            self.discoveredItems = configs
+            self.onItemsUpdated?()
             return itemIDs
         }
 
-        // Run scan on background queue to keep UI responsive
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            let rawItemIDs = self.performScan()
-            let itemIDs = self.processItemIDs(rawItemIDs)
-            let configs = itemIDs.map { ItemConfig(id: $0, category: self.stateStore.category(for: $0)) }
-
-            DispatchQueue.main.async {
-                self.discoveredItems = configs
-                self.onItemsUpdated?()
-            }
-        }
+        let rawItemIDs = self.performScan()
+        let itemIDs = self.processItemIDs(rawItemIDs)
+        let configs = itemIDs.map { ItemConfig(id: $0, category: self.stateStore.category(for: $0)) }
+        self.discoveredItems = configs
+        self.onItemsUpdated?()
 
         return discoveredItems.map(\.id)
     }
@@ -292,7 +373,6 @@ public final class StatusBarObserver: ObservableObject {
             }
 
             if runningApp.activationPolicy == .accessory && runningApp.icon != nil {
-                // If it's a known non-system utility app or user installed
                 if let bundleID = runningApp.bundleIdentifier, !bundleID.hasPrefix("com.apple.") {
                     let id = bundleID
                     if !itemIDs.contains(id) {

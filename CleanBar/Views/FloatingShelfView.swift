@@ -1,7 +1,7 @@
 import SwiftUI
 import Cocoa
 
-/// Interactive floating sub-bar view displaying all menu bar items under the menu bar.
+/// Interactive floating sub-bar view displaying the true menu bar icons of items hidden to the left of CleanBar.
 public struct FloatingShelfView: View {
     @ObservedObject public var observer: StatusBarObserver
     public var onOpenPreferences: (() -> Void)?
@@ -13,23 +13,23 @@ public struct FloatingShelfView: View {
 
     public var body: some View {
         HStack(spacing: 6) {
-            if observer.discoveredItems.isEmpty {
+            if observer.leftHiddenItems.isEmpty {
                 HStack(spacing: 6) {
-                    Image(systemName: "menubar.rectangle")
+                    Image(systemName: "command")
                         .foregroundColor(.secondary)
-                    Text("Scanning Menu Bar Items...")
-                        .font(.system(size: 12, weight: .medium))
+                    Text("⌘ Drag icons to the left of CleanBar to hide")
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.secondary)
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 8)
             } else {
-                ForEach(observer.discoveredItems) { item in
-                    FloatingShelfItemTile(item: item, observer: observer)
+                ForEach(observer.leftHiddenItems) { item in
+                    FloatingShelfStatusItemTile(item: item, observer: observer)
                 }
             }
 
             Divider()
-                .frame(height: 18)
+                .frame(height: 16)
                 .padding(.horizontal, 2)
 
             // Preferences Quick Action
@@ -37,48 +37,47 @@ public struct FloatingShelfView: View {
                 onOpenPreferences?()
             }) {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.secondary)
-                    .frame(width: 24, height: 24)
+                    .frame(width: 22, height: 22)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("CleanBar Preferences")
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
     }
 }
 
-private struct FloatingShelfItemTile: View {
-    let item: ItemConfig
+private struct FloatingShelfStatusItemTile: View {
+    let item: StatusItemModel
     let observer: StatusBarObserver
     @State private var isHovered: Bool = false
 
     var body: some View {
-        let app = NSWorkspace.shared.runningApplications.first {
-            $0.bundleIdentifier == item.id || $0.localizedName == item.id
-        }
-        let icon = app?.icon ?? NSWorkspace.shared.icon(forFile: "/System/Applications/Utilities")
-        let name = app?.localizedName ?? item.id
-
         Button(action: {
-            observer.triggerItem(id: item.id)
+            observer.triggerStatusItem(item)
         }) {
             ZStack {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: 5)
                     .fill(isHovered ? Color.primary.opacity(0.15) : Color.clear)
-                    .frame(width: 28, height: 28)
+                    .frame(width: max(26, item.frame.width), height: 26)
 
-                Image(nsImage: icon)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
-                    .frame(width: 20, height: 20)
+                if let icon = item.iconImage {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                        .frame(width: max(18, item.frame.width - 4), height: 20)
+                } else {
+                    Image(systemName: "menubar.rectangle")
+                        .font(.system(size: 14))
+                }
             }
         }
         .buttonStyle(.plain)
-        .help(name)
+        .help(item.appName)
         .onHover { hovering in
             isHovered = hovering
         }

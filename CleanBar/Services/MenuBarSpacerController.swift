@@ -150,19 +150,15 @@ public final class MenuBarSpacerController: NSObject {
         onToggle?(isExpanded)
     }
 
-    /// Calculates safe collapse length stopping strictly at the right edge of the MacBook notch or app menu boundary.
-    public func calculateSafeDistanceToNotch() -> CGFloat {
+    /// Calculates safe collapse length based on the total width of items to the left, bounded by the Notch.
+    public func calculateTargetSpacerLength() -> CGFloat {
         guard let button = statusItem?.button,
               let window = button.window,
               let screen = window.screen ?? NSScreen.main else {
-            return 280.0
+            return 120.0
         }
 
         let eyeRightX = window.frame.maxX
-        guard eyeRightX > 100.0 else {
-            return 280.0
-        }
-
         var notchRightEdgeX: CGFloat = 400.0
         if #available(macOS 12.0, *) {
             if let topRightArea = screen.auxiliaryTopRightArea, topRightArea.width > 0 {
@@ -172,13 +168,21 @@ public final class MenuBarSpacerController: NSObject {
             }
         }
 
-        let distanceToNotch = eyeRightX - notchRightEdgeX
-        let safeDistance = max(80.0, min(distanceToNotch - 10.0, screen.frame.width - notchRightEdgeX))
-        return safeDistance
+        let distanceToNotch = max(40.0, eyeRightX - notchRightEdgeX - 10.0)
+
+        if let obs = observer, obs.totalHiddenWidth > 10.0 {
+            return min(obs.totalHiddenWidth + 14.0, distanceToNotch)
+        }
+
+        return min(120.0, distanceToNotch)
     }
 
     public func setExpanded(_ expanded: Bool, hiddenItemsCount: Int = 0) {
-        let targetLength: CGFloat = expanded ? 24.0 : calculateSafeDistanceToNotch()
+        if let button = statusItem?.button, let window = button.window {
+            observer?.scanLeftHiddenItems(cleanBarEyeX: window.frame.minX)
+        }
+
+        let targetLength: CGFloat = expanded ? 24.0 : calculateTargetSpacerLength()
 
         guard self.isExpanded != expanded || statusItem?.length != targetLength else { return }
         self.isExpanded = expanded
