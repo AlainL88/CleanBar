@@ -35,6 +35,8 @@ public final class MenuBarSpacerController: NSObject {
             button.action = #selector(handleStatusItemClick(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
+        // Initial state: expanded to 24.0
+        statusItem?.length = 24.0
     }
 
     @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
@@ -128,9 +130,9 @@ public final class MenuBarSpacerController: NSObject {
     }
 
     public func setExpanded(_ expanded: Bool, hiddenItemsCount: Int = 0) {
-        let targetLength: CGFloat = expanded ? 24.0 : (hiddenItemsCount > 0 ? 1000.0 : 24.0)
+        // When expanded (hovering), width is 24.0. When collapsed (not hovering), width expands to 1000.0 to hide items to the left.
+        let targetLength: CGFloat = expanded ? 24.0 : 1000.0
 
-        // Guard against redundant mutations to avoid flooding ControlCenter XPC scene invalidations
         guard self.isExpanded != expanded || statusItem?.length != targetLength else { return }
         self.isExpanded = expanded
 
