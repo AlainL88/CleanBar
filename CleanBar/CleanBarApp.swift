@@ -68,13 +68,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         obs.onItemsUpdated = { [weak self] in
             guard let self = self else { return }
-            self.layoutController.spacerController.updateSpacerLength()
+            self.layoutController.spacerController.enforceHiding()
             self.layoutController.applyVisibility(isHovered: self.hoverMonitor.isCurrentlyHovered, observer: self.observer)
         }
 
         hover.startMonitoring()
         obs.scanMenuBarItems()
         layout.applyVisibility(isHovered: false, observer: obs)
+        layout.spacerController.enforceHiding()
 
         NSLog("🚀 CleanBar status item setup completed!")
 
@@ -83,5 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.layoutController.spacerController.openOnboarding()
             }
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        SkyLightWindowManager.shared.showAllItems()
     }
 }

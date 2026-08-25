@@ -1,11 +1,10 @@
 import Cocoa
 import SwiftUI
 
-/// Manages the permanent CleanBar Eye icon and the persistent spacer that keeps hidden items off the main menu bar.
+/// Manages the permanent CleanBar Eye icon and the visual curtain overlay hiding left status bar items.
 @MainActor
 public final class MenuBarSpacerController: NSObject {
     public private(set) var controlItem: NSStatusItem?
-    public private(set) var spacerItem: NSStatusItem?
     public private(set) var isExpanded: Bool = false
     public let floatingShelf = FloatingShelfController()
     public var onToggle: ((Bool) -> Void)?
@@ -48,7 +47,7 @@ public final class MenuBarSpacerController: NSObject {
     public func setupStatusItem() {
         guard controlItem == nil else { return }
 
-        // 1. Control Status Item (The 26px Eye icon)
+        // Control Status Item (The 26px Eye icon)
         let item = NSStatusBar.system.statusItem(withLength: 26.0)
         if let button = item.button {
             let symbolConfig = NSImage.SymbolConfiguration(pointSize: 14.0, weight: .semibold)
@@ -65,25 +64,14 @@ public final class MenuBarSpacerController: NSObject {
             button.toolTip = "CleanBar - Clicca o passa il mouse per mostrare la barra fluttuante"
         }
         self.controlItem = item
-
-        // 2. Persistent Spacer Status Item (Keeps left icons off the main menu bar permanently)
-        let spacer = NSStatusBar.system.statusItem(withLength: 80.0)
-        if let spacerButton = spacer.button {
-            spacerButton.image = nil
-            spacerButton.title = ""
-            spacerButton.isTransparent = true
-        }
-        spacer.length = 80.0
-        self.spacerItem = spacer
     }
 
-    /// Updates the spacer width to match the hidden items width so they remain completely hidden on the main bar.
-    public func updateSpacerLength() {
-        guard let spacer = spacerItem, let obs = observer else { return }
-        let targetLength = max(60.0, min(300.0, obs.totalHiddenWidth + 12.0))
-        if spacer.length != targetLength {
-            spacer.length = targetLength
-        }
+    /// Enforces hiding of all menu bar icons to the left of CleanBar on the main menu bar.
+    public func enforceHiding() {
+        guard let button = controlItem?.button, let window = button.window else { return }
+        let eyeX = window.frame.minX
+        SkyLightWindowManager.shared.hideItemsToTheLeft(of: eyeX)
+        MenuBarCurtainController.shared.updateCurtain(eyeX: eyeX)
     }
 
     @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
@@ -170,6 +158,8 @@ public final class MenuBarSpacerController: NSObject {
     }
 
     @objc private func quitApp() {
+        SkyLightWindowManager.shared.showAllItems()
+        MenuBarCurtainController.shared.hideCurtain()
         NSApp.terminate(nil)
     }
 
@@ -183,7 +173,7 @@ public final class MenuBarSpacerController: NSObject {
             observer?.scanLeftHiddenItems(cleanBarEyeX: window.frame.minX)
         }
 
-        updateSpacerLength()
+        enforceHiding()
 
         guard self.isExpanded != expanded else { return }
         self.isExpanded = expanded
