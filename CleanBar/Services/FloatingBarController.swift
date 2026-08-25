@@ -5,13 +5,22 @@ import SwiftUI
 @MainActor
 public final class FloatingBarController: NSObject {
     private var panel: NSPanel?
+    private weak var observer: StatusBarObserver?
 
     public override init() {
         super.init()
     }
 
-    /// Shows or hides the floating bar-shelf panel positioned relative to the target status item.
-    public func setVisible(_ visible: Bool, relativeTo button: NSStatusBarButton?) {
+    public func configure(observer: StatusBarObserver) {
+        self.observer = observer
+    }
+
+    /// Shows or hides the floating bar-shelf panel, right-aligned with the CleanBar Eye button.
+    public func setVisible(_ visible: Bool, relativeTo button: NSStatusBarButton?, observer: StatusBarObserver? = nil) {
+        if let obs = observer {
+            self.observer = obs
+        }
+
         if visible {
             showPanel(relativeTo: button)
         } else {
@@ -20,40 +29,61 @@ public final class FloatingBarController: NSObject {
     }
 
     private func showPanel(relativeTo button: NSStatusBarButton?) {
-        guard let button = button, let window = button.window, let screen = window.screen else { return }
+        guard let button = button,
+              let window = button.window,
+              let screen = window.screen ?? NSScreen.main,
+              let observer = observer else { return }
 
         let buttonFrameInScreen = window.convertToScreen(button.frame)
 
+        let hiddenItems = observer.discoveredItems.filter { $0.category == .hiddenOnHover || $0.category == .deepHidden }
+        let displayCount = max(1, hiddenItems.isEmpty ? observer.discoveredItems.count : hiddenItems.count)
+        let panelWidth = max(120.0, CGFloat(displayCount * 36 + 28))
+        let panelHeight: CGFloat = 46.0
+
         if panel == nil {
             let p = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 280, height: 42),
+                contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight),
                 styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
                 defer: false
             )
-            p.level = .popUpMenu
+            p.level = .floating
             p.isOpaque = false
-            p.backgroundColor = .clear
+            p.backgroundColor = NSColor.clear
             p.hasShadow = true
             p.hidesOnDeactivate = false
             p.isMovableByWindowBackground = false
+
+            let hostingView = NSHostingView(rootView: FloatingBarView(observer: observer))
+            hostingView.wantsLayer = true
+            hostingView.layer?.cornerRadius = 12
+            hostingView.layer?.masksToBounds = true
 
             let visualEffect = NSVisualEffectView()
             visualEffect.blendingMode = .behindWindow
             visualEffect.material = .hudWindow
             visualEffect.state = .active
             visualEffect.wantsLayer = true
-            visualEffect.layer?.cornerRadius = 10
+            visualEffect.layer?.cornerRadius = 12
             visualEffect.layer?.masksToBounds = true
+
+            visualEffect.addSubview(hostingView)
+            hostingView.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                hostingView.leadingAnchor.constraint(equalTo: visualEffect.leadingAnchor),
+                hostingView.trailingAnchor.constraint(equalTo: visualEffect.trailingAnchor),
+                hostingView.topAnchor.constraint(equalTo: visualEffect.topAnchor),
+                hostingView.bottomAnchor.constraint(equalTo: visualEffect.bottomAnchor)
+            ])
 
             p.contentView = visualEffect
             self.panel = p
         }
 
-        // Position panel right below the Eye icon button
-        let panelWidth: CGFloat = 280
-        let panelHeight: CGFloat = 42
-        let panelX = max(10, min(screen.frame.width - panelWidth - 10, buttonFrameInScreen.midX - (panelWidth / 2)))
+        // Align panel's right edge with the Eye icon's right edge
+        let eyeRightX = buttonFrameInScreen.maxX
+        let panelX = max(10, min(screen.frame.width - panelWidth - 10, eyeRightX - panelWidth))
         let panelY = buttonFrameInScreen.minY - panelHeight - 6
 
         panel?.setFrame(NSRect(x: panelX, y: panelY, width: panelWidth, height: panelHeight), display: true)

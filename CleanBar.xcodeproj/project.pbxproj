@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		B59AA704303D9D5100B72AA0 /* CleanBar - hide icons.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "CleanBar - hide icons.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B59AA704303D9D5100B72AA0 /* CleanBar - hide icons.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = "CleanBar - hide icons.app"; path = CleanBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */

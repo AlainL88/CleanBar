@@ -6,6 +6,7 @@ import SwiftUI
 public final class MenuBarSpacerController: NSObject {
     public private(set) var statusItem: NSStatusItem?
     public private(set) var isExpanded: Bool = false
+    public private(set) var floatingBarController = FloatingBarController()
     public var onToggle: ((Bool) -> Void)?
     public var isPopoverShown: Bool {
         return preferencesPopover?.isShown == true
@@ -20,11 +21,15 @@ public final class MenuBarSpacerController: NSObject {
         self.stateStore = stateStore
         super.init()
         setupStatusItem()
+        if let obs = observer {
+            floatingBarController.configure(observer: obs)
+        }
     }
 
     public func configure(observer: StatusBarObserver, stateStore: StateStore) {
         self.observer = observer
         self.stateStore = stateStore
+        floatingBarController.configure(observer: observer)
     }
 
     private func setupStatusItem() {
@@ -151,8 +156,6 @@ public final class MenuBarSpacerController: NSObject {
             return
         }
 
-        // When expanded, length is 24px (eye icon only).
-        // When collapsed, calculate exact gap from the eye's right edge to the app menu boundary:
         let rightEdgeX = window.frame.maxX
         var leftBoundaryX: CGFloat = 350.0
         if #available(macOS 12.0, *) {
@@ -162,6 +165,19 @@ public final class MenuBarSpacerController: NSObject {
         }
 
         let maxGap = rightEdgeX - leftBoundaryX
+        let isSpaceTight = maxGap < max(480.0, CGFloat(hiddenItemsCount * 36 + 120))
+
+        let useFloating: Bool = {
+            switch style {
+            case .inline:
+                return false
+            case .floating:
+                return true
+            case .auto:
+                return isSpaceTight
+            }
+        }()
+
         let collapseLength: CGFloat = max(350.0, min(maxGap, screen.frame.width - 350.0))
         let targetLength: CGFloat = expanded ? 24.0 : collapseLength
 
@@ -175,6 +191,13 @@ public final class MenuBarSpacerController: NSObject {
 
         if statusItem?.length != targetLength {
             statusItem?.length = targetLength
+        }
+
+        // Floating Bar-Shelf display handling
+        if expanded && useFloating {
+            floatingBarController.setVisible(true, relativeTo: button, observer: observer)
+        } else {
+            floatingBarController.setVisible(false, relativeTo: button, observer: observer)
         }
     }
 }
