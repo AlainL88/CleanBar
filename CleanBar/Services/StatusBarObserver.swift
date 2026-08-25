@@ -11,6 +11,7 @@ public final class StatusBarObserver: ObservableObject {
 
     public var onItemsUpdated: (() -> Void)?
     private var revealTimers: [String: Timer] = [:]
+    private var permissionPollTimer: Timer?
 
     public let stateStore: StateStore
     private let workspaceNotificationCenter: NotificationCenter
@@ -32,9 +33,11 @@ public final class StatusBarObserver: ObservableObject {
 
         self.isAccessibilityTrusted = checkAccessibilityPermissions(prompt: false)
         setupNotificationObservers()
+        startPermissionPolling()
     }
 
     deinit {
+        permissionPollTimer?.invalidate()
         for observer in workspaceObservers {
             workspaceNotificationCenter.removeObserver(observer)
         }
@@ -44,6 +47,19 @@ public final class StatusBarObserver: ObservableObject {
             defaultNotificationCenter.removeObserver(observer)
         }
         defaultObservers.removeAll()
+    }
+
+    private func startPermissionPolling() {
+        permissionPollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            let trusted = AXIsProcessTrusted()
+            if self.isAccessibilityTrusted != trusted {
+                self.isAccessibilityTrusted = trusted
+                if trusted {
+                    self.scanMenuBarItems()
+                }
+            }
+        }
     }
 
     @discardableResult
@@ -219,6 +235,15 @@ public final class StatusBarObserver: ObservableObject {
             self?.scanMenuBarItems()
         }
         defaultObservers.append(screenObserver)
+
+        let becomeActiveObserver = defaultNotificationCenter.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.checkAccessibilityPermissions(prompt: false)
+        }
+        defaultObservers.append(becomeActiveObserver)
     }
 
     private func performScan() -> [String] {
