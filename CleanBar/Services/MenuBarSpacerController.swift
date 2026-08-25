@@ -38,16 +38,20 @@ public final class MenuBarSpacerController: NSObject {
 
     public func setupStatusItem() {
         guard statusItem == nil else { return }
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        let item = NSStatusBar.system.statusItem(withLength: 26.0)
         if let button = item.button {
-            let symbolConfig = NSImage.SymbolConfiguration(pointSize: 14.0, weight: .medium)
-            let image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: "CleanBar")?.withSymbolConfiguration(symbolConfig)
-            image?.isTemplate = true
-            button.image = image
+            let symbolConfig = NSImage.SymbolConfiguration(pointSize: 14.0, weight: .semibold)
+            if let img = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: "CleanBar")?.withSymbolConfiguration(symbolConfig) {
+                img.isTemplate = true
+                img.size = NSSize(width: 18, height: 18)
+                button.image = img
+            }
             button.imagePosition = .imageOnly
+            button.imageScaling = .scaleProportionallyDown
             button.target = self
             button.action = #selector(handleStatusItemClick(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            button.toolTip = "CleanBar - Clicca o passa il mouse per mostrare la barra fluttuante"
         }
         self.statusItem = item
     }
@@ -154,10 +158,12 @@ public final class MenuBarSpacerController: NSObject {
         self.isExpanded = expanded
 
         let symbolName = expanded ? "eye.fill" : "eye.slash"
-        let symbolConfig = NSImage.SymbolConfiguration(pointSize: 14.0, weight: .medium)
-        let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "CleanBar")?.withSymbolConfiguration(symbolConfig)
-        image?.isTemplate = true
-        statusItem?.button?.image = image
+        let symbolConfig = NSImage.SymbolConfiguration(pointSize: 14.0, weight: .semibold)
+        if let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "CleanBar")?.withSymbolConfiguration(symbolConfig) {
+            image.isTemplate = true
+            image.size = NSSize(width: 18, height: 18)
+            statusItem?.button?.image = image
+        }
 
         if expanded {
             floatingShelf.setVisible(true, relativeTo: statusItem?.button)

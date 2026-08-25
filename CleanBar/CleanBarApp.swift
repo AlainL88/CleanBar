@@ -5,18 +5,30 @@
 //  Created by Alain Lima on 25/08/2026.
 //
 
-import SwiftUI
 import Cocoa
+import SwiftUI
 
+@main
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    public var stateStore: StateStore?
-    public var observer: StatusBarObserver?
-    public var layoutController: LayoutController?
-    public var hoverMonitor: HoverMonitor?
+    public static private(set) var shared: AppDelegate?
+
+    public private(set) var stateStore: StateStore!
+    public private(set) var observer: StatusBarObserver!
+    public private(set) var layoutController: LayoutController!
+    public private(set) var hoverMonitor: HoverMonitor!
+
+    static func main() {
+        let app = NSApplication.shared
+        let delegate = AppDelegate()
+        app.delegate = delegate
+        app.setActivationPolicy(.accessory)
+        app.run()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApplication.shared.setActivationPolicy(.accessory)
+        Self.shared = self
+        NSLog("🚀 CleanBar applicationDidFinishLaunching started!")
 
         let store = StateStore()
         let obs = StatusBarObserver(stateStore: store)
@@ -34,37 +46,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Connect hover detection
         hover.onHoverChanged = { [weak self] isHovered in
-            guard let self = self, let observer = self.observer else { return }
-            self.layoutController?.applyVisibility(isHovered: isHovered, observer: observer)
+            guard let self = self else { return }
+            self.layoutController.applyVisibility(isHovered: isHovered, observer: self.observer)
         }
 
         obs.onItemsUpdated = { [weak self] in
-            guard let self = self, let observer = self.observer, let hover = self.hoverMonitor else { return }
-            self.layoutController?.applyVisibility(isHovered: hover.isCurrentlyHovered, observer: observer)
+            guard let self = self else { return }
+            self.layoutController.applyVisibility(isHovered: self.hoverMonitor.isCurrentlyHovered, observer: self.observer)
         }
 
         hover.startMonitoring()
         obs.scanMenuBarItems()
         layout.applyVisibility(isHovered: false, observer: obs)
 
+        NSLog("🚀 CleanBar status item setup completed!")
+
         if !store.hasCompletedOnboarding {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.layoutController?.spacerController.openOnboarding()
-            }
-        }
-    }
-}
-
-@main
-struct CleanBarApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-
-    var body: some Scene {
-        Settings {
-            if let obs = appDelegate.observer, let store = appDelegate.stateStore {
-                SettingsView(observer: obs, stateStore: store)
-            } else {
-                EmptyView()
+                self?.layoutController.spacerController.openOnboarding()
             }
         }
     }
