@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		B59AA704303D9D5100B72AA0 /* CleanBar - hide icons.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = "CleanBar - hide icons.app"; path = CleanBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B59AA704303D9D5100B72AA0 /* CleanBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CleanBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -38,7 +38,7 @@
 		B59AA705303D9D5100B72AA0 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				B59AA704303D9D5100B72AA0 /* CleanBar - hide icons.app */,
+				B59AA704303D9D5100B72AA0 /* CleanBar.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -61,7 +61,7 @@
 			);
 			name = CleanBar;
 			productName = CleanBar;
-			productReference = B59AA704303D9D5100B72AA0 /* CleanBar - hide icons.app */;
+			productReference = B59AA704303D9D5100B72AA0 /* CleanBar.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -243,7 +243,7 @@
 				CODE_SIGN_ENTITLEMENTS = CleanBar/CleanBar.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 2336T548BS;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -279,7 +279,7 @@
 				CODE_SIGN_ENTITLEMENTS = CleanBar/CleanBar.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 2336T548BS;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;

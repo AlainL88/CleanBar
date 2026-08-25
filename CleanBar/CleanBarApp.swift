@@ -44,11 +44,16 @@ struct CleanBarApp: App {
 
         hover.startMonitoring()
         obs.scanMenuBarItems()
-        layout.applyVisibility(isHovered: false, observer: obs)
+
+        // Allow WindowServer 0.2s to lay out the status item window on screen before initial collapse
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak obs] in
+            guard let obs = obs else { return }
+            layout.applyVisibility(isHovered: false, observer: obs)
+        }
 
         // Launch onboarding automatically on first launch
         if !store.hasCompletedOnboarding {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 layout.spacerController.openOnboarding()
             }
         }

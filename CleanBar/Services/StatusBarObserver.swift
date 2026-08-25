@@ -115,10 +115,10 @@ public final class StatusBarObserver: ObservableObject {
             return itemIDs
         }
 
-        // Run AX scan asynchronously on background queue to keep UI 100% responsive
+        // Run scan on background queue to keep UI responsive
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            let rawItemIDs = self.performAXScan()
+            let rawItemIDs = self.performScan()
             let itemIDs = self.processItemIDs(rawItemIDs)
             let configs = itemIDs.map { ItemConfig(id: $0, category: self.stateStore.category(for: $0)) }
 
@@ -172,37 +172,35 @@ public final class StatusBarObserver: ObservableObject {
         defaultObservers.append(screenObserver)
     }
 
-    private func performAXScan() -> [String] {
+    private func performScan() -> [String] {
         var itemIDs: [String] = []
+        let selfBundleID = Bundle.main.bundleIdentifier
 
-        // System-wide AX Applications scan for status items
-        let systemWide = AXUIElementCreateSystemWide()
-        var appListRef: CFTypeRef?
-        if AXUIElementCopyAttributeValue(systemWide, "AXApplications" as CFString, &appListRef) == .success,
-           let apps = appListRef as? [AXUIElement] {
-            for app in apps {
-                var pid: pid_t = 0
-                guard AXUIElementGetPid(app, &pid) == .success else { continue }
-                let runningApp = NSRunningApplication(processIdentifier: pid)
-                if hasStatusItem(app: app) {
-                    if let id = resolveIdentifier(for: app, runningApp: runningApp) {
+        // 1. Scan running background/accessory applications (which host menu bar icons)
+        for runningApp in NSWorkspace.shared.runningApplications {
+            let pid = runningApp.processIdentifier
+            guard pid != ProcessInfo.processInfo.processIdentifier else { continue }
+            if let bundleID = runningApp.bundleIdentifier, bundleID == selfBundleID { continue }
+
+            if runningApp.activationPolicy == .accessory {
+                if let id = runningApp.bundleIdentifier ?? runningApp.localizedName, !id.isEmpty {
+                    if !itemIDs.contains(id) {
                         itemIDs.append(id)
                     }
                 }
             }
         }
 
-        // Running applications scan filtering strictly for apps with AXExtrasMenuBar status items
-        let selfBundleID = Bundle.main.bundleIdentifier
-        for runningApp in NSWorkspace.shared.runningApplications {
-            let pid = runningApp.processIdentifier
-            guard pid != ProcessInfo.processInfo.processIdentifier else { continue }
-            if let bundleID = runningApp.bundleIdentifier, bundleID == selfBundleID { continue }
-
-            let app = AXUIElementCreateApplication(pid)
-            if hasStatusItem(app: app) {
-                if let id = resolveIdentifier(for: app, runningApp: runningApp) {
-                    itemIDs.append(id)
+        // 2. Scan AX status items if accessibility permission is granted
+        if isAccessibilityTrusted {
+            for runningApp in NSWorkspace.shared.runningApplications {
+                let pid = runningApp.processIdentifier
+                guard pid != ProcessInfo.processInfo.processIdentifier else { continue }
+                let app = AXUIElementCreateApplication(pid)
+                if hasStatusItem(app: app) {
+                    if let id = resolveIdentifier(for: app, runningApp: runningApp), !itemIDs.contains(id) {
+                        itemIDs.append(id)
+                    }
                 }
             }
         }
@@ -231,20 +229,14 @@ public final class StatusBarObserver: ObservableObject {
             return bundleID
         }
 
+        if let localizedName = runningApp?.localizedName, !localizedName.isEmpty {
+            return localizedName
+        }
+
         var titleRef: CFTypeRef?
-        if AXUIElementCopyAttributeValue(app, kAXTitleAttribute as CFString, &titleRef) == .success,
+        if AXUIElementCopyAttributeValue(app, "AXTitle" as CFString, &titleRef) == .success,
            let title = titleRef as? String, !title.isEmpty {
             return title
-        }
-
-        var descRef: CFTypeRef?
-        if AXUIElementCopyAttributeValue(app, kAXDescriptionAttribute as CFString, &descRef) == .success,
-           let desc = descRef as? String, !desc.isEmpty {
-            return desc
-        }
-
-        if let locName = runningApp?.localizedName, !locName.isEmpty {
-            return locName
         }
 
         return nil

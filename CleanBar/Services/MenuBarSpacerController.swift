@@ -1,7 +1,7 @@
 import Cocoa
 import SwiftUI
 
-/// Single status item controller managing the permanent CleanBar Eye icon and dynamic menu bar spacer.
+/// Single status item controller managing the permanent CleanBar Eye icon, notch boundary spacer, and floating bar-shelf.
 @MainActor
 public final class MenuBarSpacerController: NSObject {
     public private(set) var statusItem: NSStatusItem?
@@ -149,23 +149,40 @@ public final class MenuBarSpacerController: NSObject {
         onToggle?(isExpanded)
     }
 
-    public func setExpanded(_ expanded: Bool, hiddenItemsCount: Int = 0, style: BarShelfStyle = .auto) {
+    /// Calculates safe collapse length stopping strictly at the right edge of the MacBook camera notch.
+    public func calculateSafeDistanceToNotch() -> CGFloat {
         guard let button = statusItem?.button,
               let window = button.window,
               let screen = window.screen ?? NSScreen.main else {
-            return
+            return 320.0
         }
 
-        let rightEdgeX = window.frame.maxX
-        var leftBoundaryX: CGFloat = 350.0
+        let eyeRightX = window.frame.maxX
+        // Guard against uninitialized screen frames on initial launch
+        guard eyeRightX > 100.0 else {
+            return 320.0
+        }
+
+        // Notch boundary on Apple Silicon MacBooks:
+        // auxiliaryTopRightArea.origin.x is the right edge of the physical notch!
+        var notchRightEdgeX: CGFloat = 400.0
         if #available(macOS 12.0, *) {
-            if let auxiliaryTopLeftArea = screen.auxiliaryTopLeftArea, auxiliaryTopLeftArea.width > 0 {
-                leftBoundaryX = max(leftBoundaryX, auxiliaryTopLeftArea.width)
+            if let topRightArea = screen.auxiliaryTopRightArea, topRightArea.width > 0 {
+                notchRightEdgeX = topRightArea.origin.x
+            } else if let topLeftArea = screen.auxiliaryTopLeftArea, topLeftArea.width > 0 {
+                notchRightEdgeX = topLeftArea.maxX
             }
         }
 
-        let maxGap = rightEdgeX - leftBoundaryX
-        let isSpaceTight = maxGap < max(480.0, CGFloat(hiddenItemsCount * 36 + 120))
+        let distanceToNotch = eyeRightX - notchRightEdgeX
+        return max(150.0, min(distanceToNotch, screen.frame.width - notchRightEdgeX))
+    }
+
+    public func setExpanded(_ expanded: Bool, hiddenItemsCount: Int = 0, style: BarShelfStyle = .auto) {
+        guard let button = statusItem?.button else { return }
+
+        let collapseLength = calculateSafeDistanceToNotch()
+        let isSpaceTight = collapseLength < max(400.0, CGFloat(hiddenItemsCount * 36 + 100))
 
         let useFloating: Bool = {
             switch style {
@@ -178,7 +195,6 @@ public final class MenuBarSpacerController: NSObject {
             }
         }()
 
-        let collapseLength: CGFloat = max(350.0, min(maxGap, screen.frame.width - 350.0))
         let targetLength: CGFloat = expanded ? 24.0 : collapseLength
 
         guard self.isExpanded != expanded || statusItem?.length != targetLength else { return }
