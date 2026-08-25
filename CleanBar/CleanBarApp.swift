@@ -30,9 +30,25 @@ struct CleanBarApp: App {
         // Configure single unified status item
         layout.spacerController.configure(observer: obs, stateStore: store)
 
-        // Connect hover detection to visibility controller
+        var previousFrontmostApp: NSRunningApplication?
+
+        // Connect hover detection to visibility controller and auto-clear app menus on hover
         hover.onHoverChanged = { [weak obs] isHovered in
             guard let obs = obs else { return }
+
+            if isHovered {
+                let currentFrontmost = NSWorkspace.shared.frontmostApplication
+                if currentFrontmost?.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+                    previousFrontmostApp = currentFrontmost
+                    NSApp.activate()
+                }
+            } else {
+                if let prevApp = previousFrontmostApp {
+                    prevApp.activate()
+                    previousFrontmostApp = nil
+                }
+            }
+
             layout.applyVisibility(isHovered: isHovered, observer: obs)
         }
 
