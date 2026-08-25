@@ -5,10 +5,16 @@ import Cocoa
 public struct FloatingShelfView: View {
     @ObservedObject public var observer: StatusBarObserver
     public var onOpenPreferences: (() -> Void)?
+    public var onItemClicked: (() -> Void)?
 
-    public init(observer: StatusBarObserver, onOpenPreferences: (() -> Void)? = nil) {
+    public init(
+        observer: StatusBarObserver,
+        onOpenPreferences: (() -> Void)? = nil,
+        onItemClicked: (() -> Void)? = nil
+    ) {
         self.observer = observer
         self.onOpenPreferences = onOpenPreferences
+        self.onItemClicked = onItemClicked
     }
 
     public var body: some View {
@@ -26,7 +32,13 @@ public struct FloatingShelfView: View {
                 .padding(.horizontal, 6)
             } else {
                 ForEach(observer.leftHiddenItems) { item in
-                    FloatingShelfStatusItemTile(item: item, observer: observer)
+                    FloatingShelfStatusItemTile(
+                        item: item,
+                        observer: observer,
+                        onClicked: {
+                            onItemClicked?()
+                        }
+                    )
                 }
             }
 
@@ -55,10 +67,12 @@ public struct FloatingShelfView: View {
 private struct FloatingShelfStatusItemTile: View {
     let item: StatusItemModel
     let observer: StatusBarObserver
+    var onClicked: (() -> Void)?
     @State private var isHovered: Bool = false
 
     var body: some View {
         Button(action: {
+            onClicked?()
             observer.triggerStatusItem(item)
         }) {
             ZStack {

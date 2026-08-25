@@ -4,17 +4,29 @@ import SwiftUI
 /// Controller managing the floating sub-bar panel displayed underneath the menu bar.
 @MainActor
 public final class FloatingShelfController: NSObject {
-    private var panel: NSPanel?
+    public private(set) var panel: NSPanel?
     private weak var observer: StatusBarObserver?
     public var onOpenPreferences: (() -> Void)?
+    public var onItemTriggered: (() -> Void)?
+
+    /// Returns current panel frame in screen coordinates if visible.
+    public var panelFrame: CGRect? {
+        guard let p = panel, p.isVisible else { return nil }
+        return p.frame
+    }
 
     public override init() {
         super.init()
     }
 
-    public func configure(observer: StatusBarObserver, onOpenPreferences: (() -> Void)? = nil) {
+    public func configure(
+        observer: StatusBarObserver,
+        onOpenPreferences: (() -> Void)? = nil,
+        onItemTriggered: (() -> Void)? = nil
+    ) {
         self.observer = observer
         self.onOpenPreferences = onOpenPreferences
+        self.onItemTriggered = onItemTriggered
     }
 
     public func setVisible(_ visible: Bool, relativeTo button: NSStatusBarButton?) {
@@ -52,13 +64,19 @@ public final class FloatingShelfController: NSObject {
             p.hidesOnDeactivate = false
             p.isMovableByWindowBackground = false
 
-            let shelfView = FloatingShelfView(observer: observer, onOpenPreferences: { [weak self] in
-                self?.onOpenPreferences?()
-            })
+            let shelfView = FloatingShelfView(
+                observer: observer,
+                onOpenPreferences: { [weak self] in
+                    self?.onOpenPreferences?()
+                },
+                onItemClicked: { [weak self] in
+                    self?.onItemTriggered?()
+                }
+            )
 
             let hostingView = NSHostingView(rootView: shelfView)
             hostingView.wantsLayer = true
-            hostingView.layer?.cornerRadius = 8
+            hostingView.layer?.cornerRadius = 9
             hostingView.layer?.masksToBounds = true
 
             let visualEffect = NSVisualEffectView()
@@ -66,7 +84,7 @@ public final class FloatingShelfController: NSObject {
             visualEffect.material = .hudWindow
             visualEffect.state = .active
             visualEffect.wantsLayer = true
-            visualEffect.layer?.cornerRadius = 8
+            visualEffect.layer?.cornerRadius = 9
             visualEffect.layer?.masksToBounds = true
 
             visualEffect.addSubview(hostingView)

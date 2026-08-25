@@ -40,9 +40,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.layoutController = layout
         self.hoverMonitor = hover
 
-        // Explicitly setup status item in applicationDidFinishLaunching
+        // Explicitly setup status items in applicationDidFinishLaunching
         layout.spacerController.setupStatusItem()
-        layout.spacerController.configure(observer: obs, stateStore: store)
+
+        // Connect Floating Panel frame to HoverMonitor so hovering over the sub-bar keeps it open
+        hover.floatingPanelFrameProvider = { [weak layout] in
+            return layout?.spacerController.floatingShelf.panelFrame
+        }
+
+        // Configure spacer controller and item interaction callbacks
+        layout.spacerController.configure(
+            observer: obs,
+            stateStore: store,
+            onItemTriggered: { [weak hover] in
+                hover?.isInteracting = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    hover?.isInteracting = false
+                }
+            }
+        )
 
         // Connect hover detection
         hover.onHoverChanged = { [weak self] isHovered in
@@ -52,6 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         obs.onItemsUpdated = { [weak self] in
             guard let self = self else { return }
+            self.layoutController.spacerController.updateSpacerLength()
             self.layoutController.applyVisibility(isHovered: self.hoverMonitor.isCurrentlyHovered, observer: self.observer)
         }
 

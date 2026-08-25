@@ -1,10 +1,11 @@
 import Cocoa
 import SwiftUI
 
-/// Single clean status item controller managing the permanent CleanBar Eye icon and the floating sub-bar shelf.
+/// Manages the permanent CleanBar Eye icon and the persistent spacer that keeps hidden items off the main menu bar.
 @MainActor
 public final class MenuBarSpacerController: NSObject {
-    public private(set) var statusItem: NSStatusItem?
+    public private(set) var controlItem: NSStatusItem?
+    public private(set) var spacerItem: NSStatusItem?
     public private(set) var isExpanded: Bool = false
     public let floatingShelf = FloatingShelfController()
     public var onToggle: ((Bool) -> Void)?
@@ -28,16 +29,26 @@ public final class MenuBarSpacerController: NSObject {
         }
     }
 
-    public func configure(observer: StatusBarObserver, stateStore: StateStore) {
+    public func configure(
+        observer: StatusBarObserver,
+        stateStore: StateStore,
+        onItemTriggered: (() -> Void)? = nil
+    ) {
         self.observer = observer
         self.stateStore = stateStore
-        floatingShelf.configure(observer: observer, onOpenPreferences: { [weak self] in
-            self?.openPreferences()
-        })
+        floatingShelf.configure(
+            observer: observer,
+            onOpenPreferences: { [weak self] in
+                self?.openPreferences()
+            },
+            onItemTriggered: onItemTriggered
+        )
     }
 
     public func setupStatusItem() {
-        guard statusItem == nil else { return }
+        guard controlItem == nil else { return }
+
+        // 1. Control Status Item (The 26px Eye icon)
         let item = NSStatusBar.system.statusItem(withLength: 26.0)
         if let button = item.button {
             let symbolConfig = NSImage.SymbolConfiguration(pointSize: 14.0, weight: .semibold)
@@ -53,7 +64,26 @@ public final class MenuBarSpacerController: NSObject {
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             button.toolTip = "CleanBar - Clicca o passa il mouse per mostrare la barra fluttuante"
         }
-        self.statusItem = item
+        self.controlItem = item
+
+        // 2. Persistent Spacer Status Item (Keeps left icons off the main menu bar permanently)
+        let spacer = NSStatusBar.system.statusItem(withLength: 80.0)
+        if let spacerButton = spacer.button {
+            spacerButton.image = nil
+            spacerButton.title = ""
+            spacerButton.isTransparent = true
+        }
+        spacer.length = 80.0
+        self.spacerItem = spacer
+    }
+
+    /// Updates the spacer width to match the hidden items width so they remain completely hidden on the main bar.
+    public func updateSpacerLength() {
+        guard let spacer = spacerItem, let obs = observer else { return }
+        let targetLength = max(60.0, min(300.0, obs.totalHiddenWidth + 12.0))
+        if spacer.length != targetLength {
+            spacer.length = targetLength
+        }
     }
 
     @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
@@ -65,7 +95,6 @@ public final class MenuBarSpacerController: NSObject {
         if event.type == .rightMouseUp || event.modifierFlags.contains(.control) {
             showContextMenu(sender)
         } else {
-            // Left click toggles the floating shelf
             toggleExpansion()
         }
     }
@@ -86,13 +115,13 @@ public final class MenuBarSpacerController: NSObject {
         quitItem.target = self
         menu.addItem(quitItem)
 
-        statusItem?.menu = menu
-        statusItem?.button?.performClick(nil)
-        statusItem?.menu = nil
+        controlItem?.menu = menu
+        controlItem?.button?.performClick(nil)
+        controlItem?.menu = nil
     }
 
     @objc public func openPreferences() {
-        guard let observer = observer, let stateStore = stateStore, let button = statusItem?.button else { return }
+        guard let observer = observer, let stateStore = stateStore, let button = controlItem?.button else { return }
 
         if preferencesPopover?.isShown == true {
             preferencesPopover?.close()
@@ -119,7 +148,7 @@ public final class MenuBarSpacerController: NSObject {
     }
 
     @objc public func openOnboarding() {
-        guard let stateStore = stateStore, let button = statusItem?.button else { return }
+        guard let stateStore = stateStore, let button = controlItem?.button else { return }
 
         if preferencesPopover?.isShown == true {
             preferencesPopover?.close()
@@ -150,9 +179,11 @@ public final class MenuBarSpacerController: NSObject {
     }
 
     public func setExpanded(_ expanded: Bool, hiddenItemsCount: Int = 0) {
-        if let button = statusItem?.button, let window = button.window {
+        if let button = controlItem?.button, let window = button.window {
             observer?.scanLeftHiddenItems(cleanBarEyeX: window.frame.minX)
         }
+
+        updateSpacerLength()
 
         guard self.isExpanded != expanded else { return }
         self.isExpanded = expanded
@@ -162,13 +193,13 @@ public final class MenuBarSpacerController: NSObject {
         if let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "CleanBar")?.withSymbolConfiguration(symbolConfig) {
             image.isTemplate = true
             image.size = NSSize(width: 18, height: 18)
-            statusItem?.button?.image = image
+            controlItem?.button?.image = image
         }
 
         if expanded {
-            floatingShelf.setVisible(true, relativeTo: statusItem?.button)
+            floatingShelf.setVisible(true, relativeTo: controlItem?.button)
         } else {
-            floatingShelf.setVisible(false, relativeTo: statusItem?.button)
+            floatingShelf.setVisible(false, relativeTo: controlItem?.button)
         }
     }
 }

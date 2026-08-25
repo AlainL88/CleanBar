@@ -2,21 +2,33 @@ import Cocoa
 import ApplicationServices
 
 /// `HoverMonitor` handles global mouse event monitoring and menu bar hit-testing.
-/// It detects when the cursor enters empty space or status item regions in the menu bar,
-/// while suppressing activations when hovering over active application menus.
+/// It detects when the cursor is over the CleanBar trigger area or the Floating Shelf panel,
+/// and prevents dismissal while interacting with context menus or hovering over the sub-bar.
 @MainActor
 public final class HoverMonitor {
 
     // MARK: - Public Properties
 
-    /// Callback invoked when the hover state changes (debounced by default).
+    /// Callback invoked when the hover state changes (debounced).
     public var onHoverChanged: ((Bool) -> Void)?
 
-    /// Current hover status indicating whether the cursor is over empty menu bar space.
+    /// Current hover status.
     public private(set) var isCurrentlyHovered: Bool = false
 
     /// Indicates whether global mouse tracking is active.
     public private(set) var isMonitoring: Bool = false
+
+    /// Provider returning the current screen frame of the floating shelf panel.
+    public var floatingPanelFrameProvider: (() -> CGRect?)?
+
+    /// Flag indicating whether the user is actively interacting with an item menu.
+    public var isInteracting: Bool = false {
+        didSet {
+            if isInteracting {
+                updateHoverState(true)
+            }
+        }
+    }
 
     // MARK: - Private Properties
 
@@ -34,10 +46,9 @@ public final class HoverMonitor {
 
     // MARK: - Initialization
 
-    /// Initializes a `HoverMonitor` instance with configurable dependencies.
     public init(
         debounceInterval: TimeInterval = 0.05,
-        unhoverDelay: TimeInterval = 0.5,
+        unhoverDelay: TimeInterval = 0.4,
         menuBarHeight: CGFloat = 32,
         screenHeightProvider: @escaping () -> CGFloat = { NSScreen.main?.frame.height ?? 1000 },
         appMenuChecker: @escaping (CGPoint) -> Bool = { _ in false },
@@ -86,6 +97,12 @@ public final class HoverMonitor {
             queue: .main
         ) { [weak self] _ in
             self?.isMenuTracking = false
+            // Keep grace period after menu closes
+            self?.debounceTimer?.invalidate()
+            self?.debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+                let mouseLoc = NSEvent.mouseLocation
+                self?.handleMouseMoved(mouseLoc)
+            }
         }
         menuObservers.append(endObserver)
     }
@@ -97,13 +114,12 @@ public final class HoverMonitor {
         guard eventMonitor == nil else { return }
         isMonitoring = true
         eventMonitor = eventMonitorFactory([.mouseMoved]) { [weak self] event in
-            // Use NSEvent.mouseLocation for true Cocoa screen coordinates
             let mouseLoc = NSEvent.mouseLocation
             self?.handleMouseMoved(mouseLoc)
         }
     }
 
-    /// Stops global mouse movement monitoring and invalidates active debounce timers.
+    /// Stops global mouse movement monitoring.
     public func stopMonitoring() {
         if let monitor = eventMonitor {
             eventMonitorRemover(monitor)
@@ -122,7 +138,6 @@ public final class HoverMonitor {
         menuBarHeight: CGFloat = 32,
         isOverAppMenu: Bool = false
     ) -> Bool {
-        // Handle both Cocoa (bottom-left origin) and Quartz (top-left origin) coordinates
         let isTopInCocoa = point.y >= (screenHeight - menuBarHeight)
         let isTopInQuartz = point.y <= menuBarHeight && point.y >= 0
 
@@ -135,25 +150,40 @@ public final class HoverMonitor {
     public func handleMouseMoved(_ location: CGPoint) {
         let screenHeight = screenHeightProvider()
         let isOverMenu = appMenuChecker(location)
-        let isHovered = evaluateMousePosition(
+
+        // 1. Is mouse in top menu bar trigger area?
+        let isOverMenuBar = evaluateMousePosition(
             location,
             screenHeight: screenHeight,
             menuBarHeight: menuBarHeight,
             isOverAppMenu: isOverMenu
         )
 
-        if isMenuTracking {
+        // 2. Is mouse inside or hovering over the Floating Shelf panel?
+        var isOverShelf = false
+        if let shelfFrame = floatingPanelFrameProvider?(), shelfFrame.width > 0, shelfFrame.height > 0 {
+            // Expand hit area slightly (8px) for effortless mouse transit
+            let expandedFrame = shelfFrame.insetBy(dx: -8, dy: -8)
+            if expandedFrame.contains(location) {
+                isOverShelf = true
+            }
+        }
+
+        // 3. Combined effective hover condition
+        let shouldBeHovered = isOverMenuBar || isOverShelf || isMenuTracking || isInteracting
+
+        if isMenuTracking || isInteracting {
             updateHoverState(true)
             return
         }
 
         debounceTimer?.invalidate()
-        let delay = isHovered ? debounceInterval : unhoverDelay
+        let delay = shouldBeHovered ? debounceInterval : unhoverDelay
         if delay <= 0 {
-            updateHoverState(isHovered)
+            updateHoverState(shouldBeHovered)
         } else {
             debounceTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-                self?.updateHoverState(isHovered)
+                self?.updateHoverState(shouldBeHovered)
             }
         }
     }
