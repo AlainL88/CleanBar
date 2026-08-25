@@ -128,23 +128,21 @@ public final class MenuBarSpacerController: NSObject {
     }
 
     public func setExpanded(_ expanded: Bool, hiddenItemsCount: Int = 0) {
+        let targetLength: CGFloat = expanded ? 24.0 : (hiddenItemsCount > 0 ? 1000.0 : 24.0)
+
+        // Guard against redundant mutations to avoid flooding ControlCenter XPC scene invalidations
+        guard self.isExpanded != expanded || statusItem?.length != targetLength else { return }
         self.isExpanded = expanded
+
         guard let button = statusItem?.button else { return }
 
-        // Defer statusItem length mutation to avoid _NSDetectedLayoutRecursion during active AppKit layout passes
-        DispatchQueue.main.async { [weak self, weak button] in
-            guard let self = self, let button = button else { return }
-            button.image = NSImage(
-                systemSymbolName: expanded ? "eye.fill" : "eye.slash",
-                accessibilityDescription: "CleanBar"
-            )
+        button.image = NSImage(
+            systemSymbolName: expanded ? "eye.fill" : "eye.slash",
+            accessibilityDescription: "CleanBar"
+        )
 
-            if expanded {
-                self.statusItem?.length = 24.0
-            } else {
-                let collapseSpacerWidth: CGFloat = hiddenItemsCount > 0 ? 1000.0 : 24.0
-                self.statusItem?.length = collapseSpacerWidth
-            }
+        if statusItem?.length != targetLength {
+            statusItem?.length = targetLength
         }
     }
 }
