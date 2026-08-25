@@ -1,5 +1,6 @@
 import Cocoa
 import ApplicationServices
+import CoreGraphics
 import Combine
 
 @MainActor
@@ -95,7 +96,7 @@ public final class StatusBarObserver: ObservableObject {
         return temporarilyRevealedItemIDs.contains(id)
     }
 
-    /// Triggers the status bar item or activates its parent application.
+    /// Triggers the real status bar item via CGEvent click injection or Accessibility press action.
     public func triggerItem(id: String) {
         guard let app = NSWorkspace.shared.runningApplications.first(where: {
             $0.bundleIdentifier == id || $0.localizedName == id
@@ -109,13 +110,37 @@ public final class StatusBarObserver: ObservableObject {
                 var childrenRef: CFTypeRef?
                 if AXUIElementCopyAttributeValue(extras as! AXUIElement, kAXChildrenAttribute as CFString, &childrenRef) == .success,
                    let children = childrenRef as? [AXUIElement],
-                   let firstChild = children.first {
-                    AXUIElementPerformAction(firstChild, kAXPressAction as CFString)
-                    return
+                   let targetElement = children.first {
+
+                    // 1. Try resolving exact element position and sending native CGEvent mouse click
+                    var posValue: CFTypeRef?
+                    var sizeValue: CFTypeRef?
+                    if AXUIElementCopyAttributeValue(targetElement, kAXPositionAttribute as CFString, &posValue) == .success,
+                       AXUIElementCopyAttributeValue(targetElement, kAXSizeAttribute as CFString, &sizeValue) == .success,
+                       let posVal = posValue, let sizeVal = sizeValue {
+                        var point = CGPoint.zero
+                        var size = CGSize.zero
+                        if AXValueGetValue(posVal as! AXValue, .cgPoint, &point),
+                           AXValueGetValue(sizeVal as! AXValue, .cgSize, &size) {
+                            let clickPoint = CGPoint(x: point.x + size.width / 2.0, y: point.y + size.height / 2.0)
+                            let source = CGEventSource(stateID: .hidSystemState)
+                            let mouseDown = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: clickPoint, mouseButton: .left)
+                            let mouseUp = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: clickPoint, mouseButton: .left)
+                            mouseDown?.post(tap: .cghidEventTap)
+                            mouseUp?.post(tap: .cghidEventTap)
+                            return
+                        }
+                    }
+
+                    // 2. Accessibility AXPress fallback
+                    if AXUIElementPerformAction(targetElement, kAXPressAction as CFString) == .success {
+                        return
+                    }
                 }
             }
         }
 
+        // 3. Application activation fallback
         app.activate()
     }
 
