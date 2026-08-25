@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Onboarding / User Instructions View explaining CleanBar setup and controls.
+/// Onboarding / User Instructions View explaining CleanBar setup, controls, and preferences.
 public struct OnboardingView: View {
     public var onDismiss: (() -> Void)?
 
@@ -9,7 +9,7 @@ public struct OnboardingView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 18) {
             // Header
             HStack(spacing: 12) {
                 Image(systemName: "eye.fill")
@@ -31,7 +31,7 @@ public struct OnboardingView: View {
             Divider()
 
             // Instructions Steps
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
                 InstructionRow(
                     stepNumber: 1,
                     iconName: "lock.shield",
@@ -43,17 +43,24 @@ public struct OnboardingView: View {
                     stepNumber: 2,
                     iconName: "command",
                     title: "Arrange Your Icons",
-                    description: "Hold the Command (⌘) key and drag any menu bar icon to the left of CleanBar's Eye icon to hide it."
+                    description: "Hold Command (⌘) and drag any menu bar icon to the left of CleanBar's Eye icon to hide it."
                 )
 
                 InstructionRow(
                     stepNumber: 3,
                     iconName: "cursorarrow.motionlines",
-                    title: "Hover & Controls",
-                    description: "Move your mouse over the top menu bar to reveal hidden icons. Left-click the Eye icon for Preferences."
+                    title: "Hover & Reveal Controls",
+                    description: "Move your cursor over the top menu bar to reveal hidden icons. Left-click the Eye icon for Preferences."
+                )
+
+                InstructionRow(
+                    stepNumber: 4,
+                    iconName: "slider.horizontal.3",
+                    title: "Preferences & Reveal Styles",
+                    description: "Configure Launch at Login and choose your Reveal Style: Inline (menu bar), Floating (glass shelf), or Auto (recommended)."
                 )
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 2)
 
             Divider()
 
@@ -71,8 +78,8 @@ public struct OnboardingView: View {
                 .controlSize(.large)
             }
         }
-        .padding(24)
-        .frame(width: 480, height: 370)
+        .padding(22)
+        .frame(width: 500, height: 440)
     }
 }
 
@@ -87,19 +94,19 @@ private struct InstructionRow: View {
             ZStack {
                 Circle()
                     .fill(Color.accentColor.opacity(0.15))
-                    .frame(width: 36, height: 36)
+                    .frame(width: 34, height: 34)
 
                 Image(systemName: iconName)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.accentColor)
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("Step \(stepNumber): \(title)")
                     .font(.headline)
 
                 Text(description)
-                    .font(.body)
+                    .font(.subheadline)
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
