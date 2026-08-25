@@ -36,7 +36,7 @@ struct CleanBarApp: App {
             layout.applyVisibility(isHovered: isHovered, observer: obs)
         }
 
-        // Automatically enforce collapsed visibility on startup when items are scanned
+        // Keep visibility synced when status items change
         obs.onItemsUpdated = { [weak obs] in
             guard let obs = obs else { return }
             layout.applyVisibility(isHovered: hover.isCurrentlyHovered, observer: obs)
@@ -45,8 +45,11 @@ struct CleanBarApp: App {
         hover.startMonitoring()
         obs.scanMenuBarItems()
 
-        // Allow WindowServer 0.2s to lay out the status item window on screen before initial collapse
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak obs] in
+        // 1. Start initially expanded (24px) so status item window is positioned accurately by WindowServer
+        layout.spacerController.setExpanded(true)
+
+        // 2. Smoothly collapse after 0.4s once WindowServer placement is complete
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak obs] in
             guard let obs = obs else { return }
             layout.applyVisibility(isHovered: false, observer: obs)
         }

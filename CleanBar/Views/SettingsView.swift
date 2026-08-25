@@ -7,8 +7,6 @@ public struct SettingsView: View {
     public let stateStore: StateStore
     public var onShowInstructions: (() -> Void)?
 
-    @State private var selectedStyle: BarShelfStyle = .auto
-
     public init(
         observer: StatusBarObserver,
         stateStore: StateStore? = nil,
@@ -17,7 +15,6 @@ public struct SettingsView: View {
         self.observer = observer
         self.stateStore = stateStore ?? observer.stateStore
         self.onShowInstructions = onShowInstructions
-        _selectedStyle = State(initialValue: (stateStore ?? observer.stateStore).barShelfStyle)
     }
 
     public var body: some View {
@@ -88,42 +85,6 @@ public struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(NSColor.controlBackgroundColor))
                 .cornerRadius(10)
-
-                // Bar Presentation Style Card
-                VStack(alignment: .leading, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Reveal Style")
-                            .font(.body)
-                            .bold()
-                        Text("Choose how hidden menu bar icons are revealed on hover.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Picker("", selection: Binding(
-                        get: { selectedStyle },
-                        set: { newStyle in
-                            selectedStyle = newStyle
-                            stateStore.barShelfStyle = newStyle
-                        }
-                    )) {
-                        ForEach(BarShelfStyle.allCases) { style in
-                            Text(style.displayName).tag(style)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-
-                    Text(selectedStyle.description)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(NSColor.controlBackgroundColor))
-                .cornerRadius(10)
             }
 
             // Accessibility Banner if permission is not granted
@@ -185,7 +146,7 @@ public struct SettingsView: View {
             }
         }
         .padding(20)
-        .frame(width: 460)
+        .frame(width: 440)
         .alert("Applications Folder Required", isPresented: $launchAtLoginService.showInstallationAlert) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -193,7 +154,6 @@ public struct SettingsView: View {
         }
         .onAppear {
             launchAtLoginService.checkStatus()
-            selectedStyle = stateStore.barShelfStyle
         }
     }
 }
