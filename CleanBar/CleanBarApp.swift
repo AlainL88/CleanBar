@@ -6,57 +6,58 @@
 //
 
 import SwiftUI
+import Cocoa
 
-@main
-struct CleanBarApp: App {
-    @StateObject private var observer: StatusBarObserver
-    private let stateStore: StateStore
-    private let hoverMonitor: HoverMonitor
-    private let layoutController: LayoutController
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    public let stateStore = StateStore()
+    public let observer: StatusBarObserver
+    public let layoutController = LayoutController()
+    public let hoverMonitor = HoverMonitor()
 
-    init() {
-        // Set activation policy to accessory (menu bar app without dock icon)
-        NSApplication.shared.setActivationPolicy(.accessory)
+    override init() {
         let store = StateStore()
         let obs = StatusBarObserver(stateStore: store)
-        let layout = LayoutController()
-        let hover = HoverMonitor()
+        self.observer = obs
+        super.init()
+    }
 
-        self._observer = StateObject(wrappedValue: obs)
-        self.stateStore = store
-        self.hoverMonitor = hover
-        self.layoutController = layout
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApplication.shared.setActivationPolicy(.accessory)
 
-        // Configure single unified status item and floating sub-bar
-        layout.spacerController.configure(observer: obs, stateStore: store)
+        // Configure status items and floating shelf
+        layoutController.spacerController.configure(observer: observer, stateStore: stateStore)
 
-        // Connect hover detection to visibility controller
-        hover.onHoverChanged = { [weak obs] isHovered in
-            guard let obs = obs else { return }
-            layout.applyVisibility(isHovered: isHovered, observer: obs)
+        // Connect hover detection
+        hoverMonitor.onHoverChanged = { [weak self] isHovered in
+            guard let self = self else { return }
+            self.layoutController.applyVisibility(isHovered: isHovered, observer: self.observer)
         }
 
-        // Keep visibility synced when status items change
-        obs.onItemsUpdated = { [weak obs] in
-            guard let obs = obs else { return }
-            layout.applyVisibility(isHovered: hover.isCurrentlyHovered, observer: obs)
+        observer.onItemsUpdated = { [weak self] in
+            guard let self = self else { return }
+            self.layoutController.applyVisibility(isHovered: self.hoverMonitor.isCurrentlyHovered, observer: self.observer)
         }
 
-        hover.startMonitoring()
-        obs.scanMenuBarItems()
-        layout.applyVisibility(isHovered: false, observer: obs)
+        hoverMonitor.startMonitoring()
+        observer.scanMenuBarItems()
+        layoutController.applyVisibility(isHovered: false, observer: observer)
 
-        // Launch onboarding automatically on first launch
-        if !store.hasCompletedOnboarding {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                layout.spacerController.openOnboarding()
+        if !stateStore.hasCompletedOnboarding {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.layoutController.spacerController.openOnboarding()
             }
         }
     }
+}
+
+@main
+struct CleanBarApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
         Settings {
-            SettingsView(observer: observer, stateStore: stateStore)
+            SettingsView(observer: appDelegate.observer, stateStore: appDelegate.stateStore)
         }
     }
 }
