@@ -7,6 +7,8 @@ public struct SettingsView: View {
     public let stateStore: StateStore
     public var onShowInstructions: (() -> Void)?
 
+    @State private var selectedStyle: BarShelfStyle = .auto
+
     public init(
         observer: StatusBarObserver,
         stateStore: StateStore? = nil,
@@ -15,6 +17,7 @@ public struct SettingsView: View {
         self.observer = observer
         self.stateStore = stateStore ?? observer.stateStore
         self.onShowInstructions = onShowInstructions
+        _selectedStyle = State(initialValue: (stateStore ?? observer.stateStore).barShelfStyle)
     }
 
     public var body: some View {
@@ -39,12 +42,13 @@ public struct SettingsView: View {
 
             Divider()
 
-            // General Settings Card (Full Width with Right-Aligned Toggle)
+            // General Settings Group
             VStack(alignment: .leading, spacing: 10) {
                 Text("General Settings")
                     .font(.headline)
                     .foregroundColor(.primary)
 
+                // Launch at Login Card
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .center) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -76,6 +80,45 @@ public struct SettingsView: View {
                         }
                         .padding(.top, 4)
                     }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(10)
+
+                // Bar Presentation Style Card (Inline, Auto, Floating)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .center) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Reveal Style")
+                                .font(.body)
+                                .bold()
+                            Text("Mode for displaying hidden status bar icons on hover.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+
+                        Picker("", selection: Binding(
+                            get: { selectedStyle },
+                            set: { newStyle in
+                                selectedStyle = newStyle
+                                stateStore.barShelfStyle = newStyle
+                            }
+                        )) {
+                            ForEach(BarShelfStyle.allCases) { style in
+                                Text(style.displayName).tag(style)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .frame(width: 140)
+                    }
+
+                    Text(selectedStyle.description)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 2)
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -149,6 +192,7 @@ public struct SettingsView: View {
         }
         .onAppear {
             launchAtLoginService.checkStatus()
+            selectedStyle = stateStore.barShelfStyle
         }
     }
 }

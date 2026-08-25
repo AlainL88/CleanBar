@@ -168,15 +168,16 @@ public final class LayoutController {
         let tempRevealed = observer.temporarilyRevealedItemIDs
 
         let hasHiddenItems = items.contains { !tempRevealed.contains($0.id) }
+        let style = observer.stateStore.barShelfStyle
 
         // Force expanded state while popover is open so the popover never shifts position
         let effectiveHovered = isHovered || spacerController.isPopoverShown
 
         if Thread.isMainThread {
-            spacerController.setExpanded(effectiveHovered, hiddenItemsCount: hasHiddenItems ? items.count : 0)
+            spacerController.setExpanded(effectiveHovered, hiddenItemsCount: hasHiddenItems ? items.count : 0, style: style)
         } else {
             DispatchQueue.main.async {
-                self.spacerController.setExpanded(effectiveHovered, hiddenItemsCount: hasHiddenItems ? items.count : 0)
+                self.spacerController.setExpanded(effectiveHovered, hiddenItemsCount: hasHiddenItems ? items.count : 0, style: style)
             }
         }
     }

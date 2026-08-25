@@ -4,6 +4,7 @@ public final class StateStore {
     private let userDefaults: UserDefaults
     private let storageKey = "CleanBarItemConfigs"
     private let onboardingKey = "CleanBarHasCompletedOnboarding"
+    private let barShelfStyleKey = "CleanBarShelfStyle"
 
     public init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
@@ -12,6 +13,19 @@ public final class StateStore {
     public var hasCompletedOnboarding: Bool {
         get { userDefaults.bool(forKey: onboardingKey) }
         set { userDefaults.set(newValue, forKey: onboardingKey) }
+    }
+
+    public var barShelfStyle: BarShelfStyle {
+        get {
+            guard let rawValue = userDefaults.string(forKey: barShelfStyleKey),
+                  let style = BarShelfStyle(rawValue: rawValue) else {
+                return .auto
+            }
+            return style
+        }
+        set {
+            userDefaults.set(newValue.rawValue, forKey: barShelfStyleKey)
+        }
     }
 
     public func category(for id: String) -> ItemCategory {

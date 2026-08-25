@@ -1,11 +1,12 @@
 import Cocoa
 import SwiftUI
 
-/// Single status item controller managing the permanent CleanBar Eye icon and popover launchers.
+/// Single status item controller managing the permanent CleanBar Eye icon, floating bar-shelf, and popover launchers.
 @MainActor
 public final class MenuBarSpacerController: NSObject {
     public private(set) var statusItem: NSStatusItem?
     public private(set) var isExpanded: Bool = false
+    public private(set) var floatingBarController = FloatingBarController()
     public var onToggle: ((Bool) -> Void)?
     public var isPopoverShown: Bool {
         return preferencesPopover?.isShown == true
@@ -131,33 +132,40 @@ public final class MenuBarSpacerController: NSObject {
 
     /// Dynamically calculates the exact collapse length needed to fill the gap
     /// between CleanBar's Eye icon and the left menu boundary/notch.
-    private func calculateDynamicCollapseLength() -> CGFloat {
+    public func calculateAvailableGap() -> CGFloat {
         guard let buttonWindow = statusItem?.button?.window,
               let screen = buttonWindow.screen ?? NSScreen.main else {
             return 600.0
         }
 
         let eyeX = buttonWindow.frame.origin.x
-        let screenWidth = screen.frame.width
 
-        // Left boundary is the end of app menu (typically ~350px - 450px) or notch left edge
         var leftBoundaryX: CGFloat = 350.0
-
         if #available(macOS 12.0, *) {
             if let auxiliaryTopLeftArea = screen.auxiliaryTopLeftArea, auxiliaryTopLeftArea.width > 0 {
                 leftBoundaryX = max(leftBoundaryX, auxiliaryTopLeftArea.width)
             }
         }
 
-        // Available gap between CleanBar's Eye icon position and the left menu boundary
-        let gap = eyeX - leftBoundaryX
-
-        // Safe dynamic length: fills the exact gap (minimum 400px, up to exact gap size)
-        return max(400.0, min(gap, screenWidth - 350.0))
+        return eyeX - leftBoundaryX
     }
 
-    public func setExpanded(_ expanded: Bool, hiddenItemsCount: Int = 0) {
-        let collapseLength = calculateDynamicCollapseLength()
+    public func setExpanded(_ expanded: Bool, hiddenItemsCount: Int = 0, style: BarShelfStyle = .auto) {
+        let gap = calculateAvailableGap()
+        let isSpaceTight = (gap < 450.0)
+
+        let useFloatingPanel: Bool = {
+            switch style {
+            case .inline:
+                return false
+            case .floating:
+                return true
+            case .auto:
+                return isSpaceTight
+            }
+        }()
+
+        let collapseLength = max(400.0, min(gap, (NSScreen.main?.frame.width ?? 1400.0) - 350.0))
         let targetLength: CGFloat = expanded ? 24.0 : collapseLength
 
         guard self.isExpanded != expanded || statusItem?.length != targetLength else { return }
@@ -172,6 +180,13 @@ public final class MenuBarSpacerController: NSObject {
 
         if statusItem?.length != targetLength {
             statusItem?.length = targetLength
+        }
+
+        // Floating Bar-Shelf handling
+        if expanded && useFloatingPanel {
+            floatingBarController.setVisible(true, relativeTo: button)
+        } else {
+            floatingBarController.setVisible(false, relativeTo: button)
         }
     }
 }
