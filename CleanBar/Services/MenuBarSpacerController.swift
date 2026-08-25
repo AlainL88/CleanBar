@@ -130,10 +130,14 @@ public final class MenuBarSpacerController: NSObject {
     }
 
     public func setExpanded(_ expanded: Bool, hiddenItemsCount: Int = 0) {
-        // Safe collapse length (~350px) to prevent macOS menu bar layout overflow from hiding items to the right (Battery, Little Snitch, etc.)
-        let screenWidth = NSScreen.main?.frame.width ?? 1400.0
-        let safeCollapseLength: CGFloat = min(400.0, max(250.0, screenWidth * 0.25))
+        let screen = NSScreen.main
+        let screenWidth = screen?.frame.width ?? 1400.0
+        let visibleWidth = screen?.visibleFrame.width ?? screenWidth
 
+        // Dynamic length calculation:
+        // When expanded (hovering): 24.0 (Eye icon width)
+        // When collapsed (not hovering): calculate safe spacer width based on screen width (~200px - 320px)
+        let safeCollapseLength: CGFloat = min(320.0, max(180.0, visibleWidth * 0.20))
         let targetLength: CGFloat = expanded ? 24.0 : safeCollapseLength
 
         guard self.isExpanded != expanded || statusItem?.length != targetLength else { return }
