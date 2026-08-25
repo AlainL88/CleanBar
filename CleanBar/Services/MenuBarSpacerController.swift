@@ -130,8 +130,11 @@ public final class MenuBarSpacerController: NSObject {
     }
 
     public func setExpanded(_ expanded: Bool, hiddenItemsCount: Int = 0) {
-        // When expanded (hovering), width is 24.0. When collapsed (not hovering), width expands to 1000.0 to hide items to the left.
-        let targetLength: CGFloat = expanded ? 24.0 : 1000.0
+        // Safe collapse length (~350px) to prevent macOS menu bar layout overflow from hiding items to the right (Battery, Little Snitch, etc.)
+        let screenWidth = NSScreen.main?.frame.width ?? 1400.0
+        let safeCollapseLength: CGFloat = min(400.0, max(250.0, screenWidth * 0.25))
+
+        let targetLength: CGFloat = expanded ? 24.0 : safeCollapseLength
 
         guard self.isExpanded != expanded || statusItem?.length != targetLength else { return }
         self.isExpanded = expanded
