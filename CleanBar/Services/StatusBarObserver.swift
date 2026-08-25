@@ -14,6 +14,7 @@ public final class StatusBarObserver: ObservableObject {
     public var onItemsUpdated: (() -> Void)?
     private var revealTimers: [String: Timer] = [:]
     private var permissionPollTimer: Timer?
+    private var isScanning: Bool = false
 
     public let stateStore: StateStore
     private let workspaceNotificationCenter: NotificationCenter
@@ -173,102 +174,104 @@ public final class StatusBarObserver: ObservableObject {
     public func scanLeftHiddenItems(cleanBarEyeX: CGFloat = 0.0) {
         guard isAccessibilityTrusted else { return }
 
-        var items: [StatusItemModel] = []
         let selfPID = ProcessInfo.processInfo.processIdentifier
 
-        // 1. Resolve CleanBar's own X position if not provided
-        var eyeX = cleanBarEyeX
-        if eyeX <= 0 {
-            let selfApp = AXUIElementCreateApplication(selfPID)
-            var extrasMenuBar: CFTypeRef?
-            if AXUIElementCopyAttributeValue(selfApp, "AXExtrasMenuBar" as CFString, &extrasMenuBar) == .success,
-               let extras = extrasMenuBar {
-                var childrenRef: CFTypeRef?
-                if AXUIElementCopyAttributeValue(extras as! AXUIElement, kAXChildrenAttribute as CFString, &childrenRef) == .success,
-                   let children = childrenRef as? [AXUIElement], let firstChild = children.first {
-                    var posValue: CFTypeRef?
-                    if AXUIElementCopyAttributeValue(firstChild, kAXPositionAttribute as CFString, &posValue) == .success,
-                       let posVal = posValue {
-                        var point = CGPoint.zero
-                        if AXValueGetValue(posVal as! AXValue, .cgPoint, &point) {
-                            eyeX = point.x
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            var items: [StatusItemModel] = []
+            var eyeX = cleanBarEyeX
+
+            if eyeX <= 0 {
+                let selfApp = AXUIElementCreateApplication(selfPID)
+                var extrasMenuBar: CFTypeRef?
+                if AXUIElementCopyAttributeValue(selfApp, "AXExtrasMenuBar" as CFString, &extrasMenuBar) == .success,
+                   let extras = extrasMenuBar {
+                    var childrenRef: CFTypeRef?
+                    if AXUIElementCopyAttributeValue(extras as! AXUIElement, kAXChildrenAttribute as CFString, &childrenRef) == .success,
+                       let children = childrenRef as? [AXUIElement], let firstChild = children.first {
+                        var posValue: CFTypeRef?
+                        if AXUIElementCopyAttributeValue(firstChild, kAXPositionAttribute as CFString, &posValue) == .success,
+                           let posVal = posValue {
+                            var point = CGPoint.zero
+                            if AXValueGetValue(posVal as! AXValue, .cgPoint, &point) {
+                                eyeX = point.x
+                            }
                         }
                     }
                 }
             }
-        }
 
-        // Fallback default boundary if CleanBar's position couldn't be queried
-        if eyeX <= 0 {
-            eyeX = NSScreen.main?.frame.width ?? 1200.0
-        }
-
-        // Ignored system components that should never be placed into the hidden shelf
-        let ignoredSystemPrefixes = [
-            "com.apple.controlcenter",
-            "com.apple.systemuiserver",
-            "com.apple.Spotlight",
-            "com.apple.Siri"
-        ]
-
-        // 2. Scan all running applications with status items
-        for runningApp in NSWorkspace.shared.runningApplications {
-            let pid = runningApp.processIdentifier
-            guard pid != selfPID else { continue }
-            if let bundleID = runningApp.bundleIdentifier {
-                if ignoredSystemPrefixes.contains(where: { bundleID.hasPrefix($0) }) { continue }
+            if eyeX <= 0 {
+                eyeX = 1200.0
             }
 
-            let appElement = AXUIElementCreateApplication(pid)
-            var extrasMenuBar: CFTypeRef?
-            if AXUIElementCopyAttributeValue(appElement, "AXExtrasMenuBar" as CFString, &extrasMenuBar) == .success,
-               let extras = extrasMenuBar {
-                var childrenRef: CFTypeRef?
-                if AXUIElementCopyAttributeValue(extras as! AXUIElement, kAXChildrenAttribute as CFString, &childrenRef) == .success,
-                   let children = childrenRef as? [AXUIElement] {
-                    for child in children {
-                        var posValue: CFTypeRef?
-                        var sizeValue: CFTypeRef?
-                        if AXUIElementCopyAttributeValue(child, kAXPositionAttribute as CFString, &posValue) == .success,
-                           AXUIElementCopyAttributeValue(child, kAXSizeAttribute as CFString, &sizeValue) == .success,
-                           let posVal = posValue, let sizeVal = sizeValue {
-                            var point = CGPoint.zero
-                            var size = CGSize.zero
-                            if AXValueGetValue(posVal as! AXValue, .cgPoint, &point),
-                               AXValueGetValue(sizeVal as! AXValue, .cgSize, &size),
-                               size.width > 8, size.height > 8 {
-                                let rect = CGRect(origin: point, size: size)
+            let ignoredSystemPrefixes = [
+                "com.apple.controlcenter",
+                "com.apple.systemuiserver",
+                "com.apple.Spotlight",
+                "com.apple.Siri"
+            ]
 
-                                // Include items located strictly to the LEFT of CleanBar's Eye icon
-                                if rect.midX < (eyeX + 10.0) {
-                                    let appName = runningApp.localizedName ?? runningApp.bundleIdentifier ?? "Status Item"
-                                    let id = runningApp.bundleIdentifier ?? appName
-                                    let icon = resolveMenuIcon(for: runningApp)
+            let apps = NSWorkspace.shared.runningApplications
+            for runningApp in apps {
+                let pid = runningApp.processIdentifier
+                guard pid != selfPID else { continue }
+                if let bundleID = runningApp.bundleIdentifier {
+                    if ignoredSystemPrefixes.contains(where: { bundleID.hasPrefix($0) }) { continue }
+                }
 
-                                    items.append(StatusItemModel(
-                                        id: id,
-                                        appName: appName,
-                                        frame: rect,
-                                        iconImage: icon,
-                                        axElement: child
-                                    ))
+                let appElement = AXUIElementCreateApplication(pid)
+                var extrasMenuBar: CFTypeRef?
+                if AXUIElementCopyAttributeValue(appElement, "AXExtrasMenuBar" as CFString, &extrasMenuBar) == .success,
+                   let extras = extrasMenuBar {
+                    var childrenRef: CFTypeRef?
+                    if AXUIElementCopyAttributeValue(extras as! AXUIElement, kAXChildrenAttribute as CFString, &childrenRef) == .success,
+                       let children = childrenRef as? [AXUIElement] {
+                        for child in children {
+                            var posValue: CFTypeRef?
+                            var sizeValue: CFTypeRef?
+                            if AXUIElementCopyAttributeValue(child, kAXPositionAttribute as CFString, &posValue) == .success,
+                               AXUIElementCopyAttributeValue(child, kAXSizeAttribute as CFString, &sizeValue) == .success,
+                               let posVal = posValue, let sizeVal = sizeValue {
+                                var point = CGPoint.zero
+                                var size = CGSize.zero
+                                if AXValueGetValue(posVal as! AXValue, .cgPoint, &point),
+                                   AXValueGetValue(sizeVal as! AXValue, .cgSize, &size),
+                                   size.width > 8, size.height > 8 {
+                                    let rect = CGRect(origin: point, size: size)
+
+                                    if rect.midX < (eyeX + 10.0) {
+                                        let appName = runningApp.localizedName ?? runningApp.bundleIdentifier ?? "Status Item"
+                                        let id = runningApp.bundleIdentifier ?? appName
+                                        let icon = self.resolveMenuIcon(for: runningApp)
+
+                                        items.append(StatusItemModel(
+                                            id: id,
+                                            appName: appName,
+                                            frame: rect,
+                                            iconImage: icon,
+                                            axElement: child
+                                        ))
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
 
-        // Sort items left-to-right
-        let sorted = items.sorted { $0.frame.minX < $1.frame.minX }
-        let totalW = sorted.reduce(0.0) { $0 + $1.frame.width }
+            let sorted = items.sorted { $0.frame.minX < $1.frame.minX }
+            let totalW = sorted.reduce(0.0) { $0 + $1.frame.width }
 
-        self.leftHiddenItems = sorted
-        if totalW > 0 {
-            self.totalHiddenWidth = totalW
+            DispatchQueue.main.async {
+                self.leftHiddenItems = sorted
+                if totalW > 0 {
+                    self.totalHiddenWidth = totalW
+                }
+                self.onItemsUpdated?()
+            }
         }
-        self.onItemsUpdated?()
     }
 
     private func resolveMenuIcon(for runningApp: NSRunningApplication?) -> NSImage? {
@@ -315,12 +318,22 @@ public final class StatusBarObserver: ObservableObject {
             return itemIDs
         }
 
-        let rawItemIDs = self.performScan()
-        let itemIDs = self.processItemIDs(rawItemIDs)
-        let configs = itemIDs.map { ItemConfig(id: $0, category: self.stateStore.category(for: $0)) }
-        self.discoveredItems = configs
-        self.scanLeftHiddenItems()
-        self.onItemsUpdated?()
+        guard !isScanning else { return discoveredItems.map(\.id) }
+        isScanning = true
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let rawItemIDs = self.performScan()
+            let itemIDs = self.processItemIDs(rawItemIDs)
+
+            DispatchQueue.main.async {
+                let configs = itemIDs.map { ItemConfig(id: $0, category: self.stateStore.category(for: $0)) }
+                self.discoveredItems = configs
+                self.isScanning = false
+                self.scanLeftHiddenItems()
+                self.onItemsUpdated?()
+            }
+        }
 
         return discoveredItems.map(\.id)
     }
@@ -411,7 +424,6 @@ public final class StatusBarObserver: ObservableObject {
             }
         }
 
-        // Also check running accessory applications that have active window/UI (not pure daemon)
         for runningApp in NSWorkspace.shared.runningApplications {
             let pid = runningApp.processIdentifier
             guard pid != ProcessInfo.processInfo.processIdentifier else { continue }
