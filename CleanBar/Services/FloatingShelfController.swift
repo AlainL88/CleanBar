@@ -32,10 +32,11 @@ public final class FloatingShelfController: NSObject {
               let observer = observer else { return }
 
         let buttonFrameInScreen = window.convertToScreen(button.frame)
-        let count = max(1, observer.leftHiddenItems.count)
-        let itemsWidth = observer.leftHiddenItems.reduce(0.0) { $0 + max(28.0, $1.frame.width) }
-        let panelWidth = max(260.0, itemsWidth + 60.0)
-        let panelHeight: CGFloat = 38.0
+        let itemsCount = observer.leftHiddenItems.count
+
+        let itemsWidth = observer.leftHiddenItems.reduce(0.0) { $0 + max(30.0, $1.frame.width) }
+        let panelWidth: CGFloat = itemsCount == 0 ? 340.0 : max(180.0, itemsWidth + 64.0)
+        let panelHeight: CGFloat = 40.0
 
         if panel == nil {
             let p = NSPanel(

@@ -12,16 +12,18 @@ public struct FloatingShelfView: View {
     }
 
     public var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             if observer.leftHiddenItems.isEmpty {
                 HStack(spacing: 6) {
                     Image(systemName: "command")
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(.secondary)
-                    Text("⌘ Drag icons to the left of CleanBar to hide")
+                    Text("Trascina le icone a sinistra dell'Occhio")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.secondary)
+                        .fixedSize()
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 6)
             } else {
                 ForEach(observer.leftHiddenItems) { item in
                     FloatingShelfStatusItemTile(item: item, observer: observer)
@@ -43,10 +45,10 @@ public struct FloatingShelfView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("CleanBar Preferences")
+            .help("Impostazioni CleanBar")
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
     }
 }
 
@@ -60,9 +62,9 @@ private struct FloatingShelfStatusItemTile: View {
             observer.triggerStatusItem(item)
         }) {
             ZStack {
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(isHovered ? Color.primary.opacity(0.15) : Color.clear)
-                    .frame(width: max(26, item.frame.width), height: 26)
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isHovered ? Color.primary.opacity(0.18) : Color.clear)
+                    .frame(width: max(28, item.frame.width), height: 28)
 
                 if let icon = item.iconImage {
                     Image(nsImage: icon)
@@ -71,7 +73,7 @@ private struct FloatingShelfStatusItemTile: View {
                         .interpolation(.high)
                         .scaledToFit()
                         .foregroundColor(.primary)
-                        .frame(width: max(18, min(24, item.frame.width - 4)), height: 18)
+                        .frame(width: 18, height: 18)
                 } else {
                     Image(systemName: "menubar.rectangle")
                         .font(.system(size: 14))

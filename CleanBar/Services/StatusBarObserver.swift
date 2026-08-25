@@ -170,16 +170,54 @@ public final class StatusBarObserver: ObservableObject {
     }
 
     /// Scans the system menu bar items located strictly to the LEFT of CleanBar's Eye icon.
-    public func scanLeftHiddenItems(cleanBarEyeX: CGFloat) {
+    public func scanLeftHiddenItems(cleanBarEyeX: CGFloat = 0.0) {
         guard isAccessibilityTrusted else { return }
 
         var items: [StatusItemModel] = []
-        let selfBundleID = Bundle.main.bundleIdentifier
+        let selfPID = ProcessInfo.processInfo.processIdentifier
 
+        // 1. Resolve CleanBar's own X position if not provided
+        var eyeX = cleanBarEyeX
+        if eyeX <= 0 {
+            let selfApp = AXUIElementCreateApplication(selfPID)
+            var extrasMenuBar: CFTypeRef?
+            if AXUIElementCopyAttributeValue(selfApp, "AXExtrasMenuBar" as CFString, &extrasMenuBar) == .success,
+               let extras = extrasMenuBar {
+                var childrenRef: CFTypeRef?
+                if AXUIElementCopyAttributeValue(extras as! AXUIElement, kAXChildrenAttribute as CFString, &childrenRef) == .success,
+                   let children = childrenRef as? [AXUIElement], let firstChild = children.first {
+                    var posValue: CFTypeRef?
+                    if AXUIElementCopyAttributeValue(firstChild, kAXPositionAttribute as CFString, &posValue) == .success,
+                       let posVal = posValue {
+                        var point = CGPoint.zero
+                        if AXValueGetValue(posVal as! AXValue, .cgPoint, &point) {
+                            eyeX = point.x
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fallback default boundary if CleanBar's position couldn't be queried
+        if eyeX <= 0 {
+            eyeX = NSScreen.main?.frame.width ?? 1200.0
+        }
+
+        // Ignored system components that should never be placed into the hidden shelf
+        let ignoredSystemPrefixes = [
+            "com.apple.controlcenter",
+            "com.apple.systemuiserver",
+            "com.apple.Spotlight",
+            "com.apple.Siri"
+        ]
+
+        // 2. Scan all running applications with status items
         for runningApp in NSWorkspace.shared.runningApplications {
             let pid = runningApp.processIdentifier
-            guard pid != ProcessInfo.processInfo.processIdentifier else { continue }
-            if let bundleID = runningApp.bundleIdentifier, bundleID == selfBundleID { continue }
+            guard pid != selfPID else { continue }
+            if let bundleID = runningApp.bundleIdentifier {
+                if ignoredSystemPrefixes.contains(where: { bundleID.hasPrefix($0) }) { continue }
+            }
 
             let appElement = AXUIElementCreateApplication(pid)
             var extrasMenuBar: CFTypeRef?
@@ -201,8 +239,8 @@ public final class StatusBarObserver: ObservableObject {
                                size.width > 8, size.height > 8 {
                                 let rect = CGRect(origin: point, size: size)
 
-                                // Include only items located strictly to the LEFT of CleanBar's Eye icon
-                                if rect.maxX <= (cleanBarEyeX + 8.0) {
+                                // Include items located strictly to the LEFT of CleanBar's Eye icon
+                                if rect.midX < (eyeX + 10.0) {
                                     let appName = runningApp.localizedName ?? runningApp.bundleIdentifier ?? "Status Item"
                                     let id = runningApp.bundleIdentifier ?? appName
                                     let icon = resolveMenuIcon(for: runningApp)
@@ -234,25 +272,33 @@ public final class StatusBarObserver: ObservableObject {
     }
 
     private func resolveMenuIcon(for runningApp: NSRunningApplication?) -> NSImage? {
-        guard let app = runningApp, let bundleURL = app.bundleURL else {
-            return runningApp?.icon
-        }
+        guard let app = runningApp else { return nil }
 
-        let resourcesURL = bundleURL.appendingPathComponent("Contents/Resources")
-        if let enumerator = FileManager.default.enumerator(at: resourcesURL, includingPropertiesForKeys: nil) {
-            for case let fileURL as URL in enumerator {
-                let name = fileURL.deletingPathExtension().lastPathComponent.lowercased()
-                if (name.contains("status") || name.contains("menubar") || name.contains("tray") || name.contains("template"))
-                    && (fileURL.pathExtension == "pdf" || fileURL.pathExtension == "png" || fileURL.pathExtension == "icns") {
-                    if let image = NSImage(contentsOf: fileURL) {
-                        image.isTemplate = true
-                        return image
+        if let bundleURL = app.bundleURL {
+            let resourcesURL = bundleURL.appendingPathComponent("Contents/Resources")
+            if let enumerator = FileManager.default.enumerator(at: resourcesURL, includingPropertiesForKeys: nil) {
+                for case let fileURL as URL in enumerator {
+                    let name = fileURL.deletingPathExtension().lastPathComponent.lowercased()
+                    if (name.contains("status") || name.contains("menubar") || name.contains("tray") || name.contains("template") || name.contains("black") || name.contains("white"))
+                        && (fileURL.pathExtension == "pdf" || fileURL.pathExtension == "png" || fileURL.pathExtension == "icns") {
+                        if let image = NSImage(contentsOf: fileURL) {
+                            image.isTemplate = true
+                            return image
+                        }
                     }
                 }
             }
         }
 
-        return app.icon
+        if let icon = app.icon {
+            return icon
+        }
+
+        if let bundleURL = app.bundleURL {
+            return NSWorkspace.shared.icon(forFile: bundleURL.path)
+        }
+
+        return nil
     }
 
     @discardableResult
@@ -264,6 +310,7 @@ public final class StatusBarObserver: ObservableObject {
             let itemIDs = processItemIDs(rawItemIDs)
             let configs = itemIDs.map { ItemConfig(id: $0, category: self.stateStore.category(for: $0)) }
             self.discoveredItems = configs
+            self.scanLeftHiddenItems()
             self.onItemsUpdated?()
             return itemIDs
         }
@@ -272,6 +319,7 @@ public final class StatusBarObserver: ObservableObject {
         let itemIDs = self.processItemIDs(rawItemIDs)
         let configs = itemIDs.map { ItemConfig(id: $0, category: self.stateStore.category(for: $0)) }
         self.discoveredItems = configs
+        self.scanLeftHiddenItems()
         self.onItemsUpdated?()
 
         return discoveredItems.map(\.id)
