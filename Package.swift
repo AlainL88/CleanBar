@@ -1,10 +1,10 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
     name: "CleanBar",
     platforms: [
-        .macOS(.v14)
+        .macOS("26.5")
     ],
     products: [
         .library(
@@ -26,5 +26,6 @@ let package = Package(
             dependencies: ["CleanBar"],
             path: "CleanBarTests"
         )
-    ]
+    ],
+    swiftLanguageModes: [.v5]
 )

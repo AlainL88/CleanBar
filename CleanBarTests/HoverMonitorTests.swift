@@ -1,6 +1,7 @@
 import XCTest
 @testable import CleanBar
 
+@MainActor
 final class HoverMonitorTests: XCTestCase {
 
     // MARK: - Hit-Testing Logic Tests

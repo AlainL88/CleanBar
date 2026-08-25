@@ -2,6 +2,7 @@ import Cocoa
 import ApplicationServices
 import Combine
 
+@MainActor
 public final class StatusBarObserver: ObservableObject {
     @Published public private(set) var discoveredItems: [ItemConfig] = []
     @Published public private(set) var isAccessibilityTrusted: Bool = false

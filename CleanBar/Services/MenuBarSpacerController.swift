@@ -2,6 +2,7 @@ import Cocoa
 import SwiftUI
 
 /// Single status item controller managing the permanent CleanBar Eye icon and popover launchers.
+@MainActor
 public final class MenuBarSpacerController: NSObject {
     public private(set) var statusItem: NSStatusItem?
     public private(set) var isExpanded: Bool = false

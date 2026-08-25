@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 100;
 	objects = {
 
 /* Begin PBXFileReference section */
@@ -21,10 +21,8 @@
 /* Begin PBXFrameworksBuildPhase section */
 		B59AA701303D9D5100B72AA0 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
@@ -58,14 +56,10 @@
 			);
 			buildRules = (
 			);
-			dependencies = (
-			);
 			fileSystemSynchronizedGroups = (
 				B59AA706303D9D5100B72AA0 /* CleanBar */,
 			);
 			name = CleanBar;
-			packageProductDependencies = (
-			);
 			productName = CleanBar;
 			productReference = B59AA704303D9D5100B72AA0 /* CleanBar - hide icons.app */;
 			productType = "com.apple.product-type.application";
@@ -94,7 +88,7 @@
 			);
 			mainGroup = B59AA6FB303D9D5100B72AA0;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
+			preferredProjectObjectVersion = 100;
 			productRefGroup = B59AA705303D9D5100B72AA0 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -107,25 +101,21 @@
 /* Begin PBXResourcesBuildPhase section */
 		B59AA702303D9D5100B72AA0 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		B59AA700303D9D5100B72AA0 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		B59AA70F303D9D5100B72AA0 /* Debug */ = {
+		B59AA70F303D9D5100B72AA0 /* Debug configuration for PBXProject "CleanBar" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -189,7 +179,7 @@
 			};
 			name = Debug;
 		};
-		B59AA710303D9D5100B72AA0 /* Release */ = {
+		B59AA710303D9D5100B72AA0 /* Release configuration for PBXProject "CleanBar" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -245,7 +235,7 @@
 			};
 			name = Release;
 		};
-		B59AA712303D9D5100B72AA0 /* Debug */ = {
+		B59AA712303D9D5100B72AA0 /* Debug configuration for PBXNativeTarget "CleanBar" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -259,6 +249,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -277,7 +268,7 @@
 			};
 			name = Debug;
 		};
-		B59AA713303D9D5100B72AA0 /* Release */ = {
+		B59AA713303D9D5100B72AA0 /* Release configuration for PBXNativeTarget "CleanBar" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -291,6 +282,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -315,19 +307,17 @@
 		B59AA6FF303D9D5100B72AA0 /* Build configuration list for PBXProject "CleanBar" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				B59AA70F303D9D5100B72AA0 /* Debug */,
-				B59AA710303D9D5100B72AA0 /* Release */,
+				B59AA70F303D9D5100B72AA0 /* Debug configuration for PBXProject "CleanBar" */,
+				B59AA710303D9D5100B72AA0 /* Release configuration for PBXProject "CleanBar" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		B59AA711303D9D5100B72AA0 /* Build configuration list for PBXNativeTarget "CleanBar" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				B59AA712303D9D5100B72AA0 /* Debug */,
-				B59AA713303D9D5100B72AA0 /* Release */,
+				B59AA712303D9D5100B72AA0 /* Debug configuration for PBXNativeTarget "CleanBar" */,
+				B59AA713303D9D5100B72AA0 /* Release configuration for PBXNativeTarget "CleanBar" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */

@@ -3,7 +3,7 @@
 **CleanBar** is a lightweight, open-source macOS menu bar manager designed to declutter and organize status bar icons effortlessly.
 
 ![macOS 26.5+](https://img.shields.io/badge/macOS-26.5%2B-blue?style=flat-square&logo=apple)
-![Swift 5.9](https://img.shields.io/badge/Swift-5.9-orange?style=flat-square&logo=swift)
+![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange?style=flat-square&logo=swift)
 ![License MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
 ---
@@ -29,7 +29,7 @@
 ## Requirements
 
 - **Operating System**: macOS 26.5 or later.
-- **Development Toolchain**: Xcode 26.0+ or Swift 5.9 toolchain.
+- **Development Toolchain**: Xcode 26.0+ or Swift 6.0 toolchain.
 
 ---
 

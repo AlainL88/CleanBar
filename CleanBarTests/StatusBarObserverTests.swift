@@ -1,6 +1,7 @@
 import XCTest
 @testable import CleanBar
 
+@MainActor
 final class StatusBarObserverTests: XCTestCase {
     private var testUserDefaults: UserDefaults!
     private let suiteName = "com.barbar.tests.statusbarobserver"

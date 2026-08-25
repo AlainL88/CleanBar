@@ -2,6 +2,7 @@ import XCTest
 import Cocoa
 @testable import CleanBar
 
+@MainActor
 final class LayoutControllerTests: XCTestCase {
     var controller: LayoutController!
 

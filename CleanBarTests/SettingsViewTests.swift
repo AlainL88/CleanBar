@@ -2,6 +2,7 @@ import XCTest
 import SwiftUI
 @testable import CleanBar
 
+@MainActor
 final class SettingsViewTests: XCTestCase {
     private var testUserDefaults: UserDefaults!
     private var testSuiteName = "CleanBarSettingsViewTests"

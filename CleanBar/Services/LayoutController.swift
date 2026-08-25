@@ -9,6 +9,7 @@ public enum SpacingMode: Equatable {
 
 /// Layout and Notch Engine responsible for positioning status items,
 /// calculating hardware notch collisions, and adjusting spacing.
+@MainActor
 public final class LayoutController {
     public static let standardPadding: CGFloat = 16.0
     public static let compactPadding: CGFloat = 8.0

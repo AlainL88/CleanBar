@@ -4,6 +4,7 @@ import ApplicationServices
 /// `HoverMonitor` handles global mouse event monitoring and menu bar hit-testing.
 /// It detects when the cursor enters empty space or status item regions in the menu bar,
 /// while suppressing activations when hovering over active application menus.
+@MainActor
 public final class HoverMonitor {
 
     // MARK: - Public Properties
@@ -59,7 +60,10 @@ public final class HoverMonitor {
     }
 
     deinit {
-        stopMonitoring()
+        if let monitor = eventMonitor {
+            eventMonitorRemover(monitor)
+        }
+        debounceTimer?.invalidate()
         for observer in menuObservers {
             NotificationCenter.default.removeObserver(observer)
         }
