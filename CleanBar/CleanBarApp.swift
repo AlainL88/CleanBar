@@ -27,28 +27,12 @@ struct CleanBarApp: App {
         self.hoverMonitor = hover
         self.layoutController = layout
 
-        // Configure single unified status item
+        // Configure single unified status item and floating sub-bar
         layout.spacerController.configure(observer: obs, stateStore: store)
 
-        var previousFrontmostApp: NSRunningApplication?
-
-        // Connect hover detection to visibility controller and auto-clear app menus on hover
+        // Connect hover detection to visibility controller
         hover.onHoverChanged = { [weak obs] isHovered in
             guard let obs = obs else { return }
-
-            if isHovered {
-                let currentFrontmost = NSWorkspace.shared.frontmostApplication
-                if currentFrontmost?.processIdentifier != ProcessInfo.processInfo.processIdentifier {
-                    previousFrontmostApp = currentFrontmost
-                    NSApp.activate()
-                }
-            } else {
-                if let prevApp = previousFrontmostApp {
-                    prevApp.activate()
-                    previousFrontmostApp = nil
-                }
-            }
-
             layout.applyVisibility(isHovered: isHovered, observer: obs)
         }
 
@@ -60,19 +44,11 @@ struct CleanBarApp: App {
 
         hover.startMonitoring()
         obs.scanMenuBarItems()
-
-        // 1. Start initially expanded (24px) so status item window is positioned accurately by WindowServer
-        layout.spacerController.setExpanded(true)
-
-        // 2. Smoothly collapse after 0.4s once WindowServer placement is complete
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak obs] in
-            guard let obs = obs else { return }
-            layout.applyVisibility(isHovered: false, observer: obs)
-        }
+        layout.applyVisibility(isHovered: false, observer: obs)
 
         // Launch onboarding automatically on first launch
         if !store.hasCompletedOnboarding {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 layout.spacerController.openOnboarding()
             }
         }

@@ -95,6 +95,30 @@ public final class StatusBarObserver: ObservableObject {
         return temporarilyRevealedItemIDs.contains(id)
     }
 
+    /// Triggers the status bar item or activates its parent application.
+    public func triggerItem(id: String) {
+        guard let app = NSWorkspace.shared.runningApplications.first(where: {
+            $0.bundleIdentifier == id || $0.localizedName == id
+        }) else { return }
+
+        if isAccessibilityTrusted {
+            let appElement = AXUIElementCreateApplication(app.processIdentifier)
+            var extrasMenuBar: CFTypeRef?
+            if AXUIElementCopyAttributeValue(appElement, "AXExtrasMenuBar" as CFString, &extrasMenuBar) == .success,
+               let extras = extrasMenuBar {
+                var childrenRef: CFTypeRef?
+                if AXUIElementCopyAttributeValue(extras as! AXUIElement, kAXChildrenAttribute as CFString, &childrenRef) == .success,
+                   let children = childrenRef as? [AXUIElement],
+                   let firstChild = children.first {
+                    AXUIElementPerformAction(firstChild, kAXPressAction as CFString)
+                    return
+                }
+            }
+        }
+
+        app.activate()
+    }
+
     @discardableResult
     public func scanMenuBarItems() -> [String] {
         _ = checkAccessibilityPermissions(prompt: false)
