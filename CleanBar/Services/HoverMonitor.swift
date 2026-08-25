@@ -38,7 +38,7 @@ public final class HoverMonitor {
     public init(
         debounceInterval: TimeInterval = 0.05,
         unhoverDelay: TimeInterval = 0.5,
-        menuBarHeight: CGFloat = 30,
+        menuBarHeight: CGFloat = 32,
         screenHeightProvider: @escaping () -> CGFloat = { NSScreen.main?.frame.height ?? 1000 },
         appMenuChecker: @escaping (CGPoint) -> Bool = { _ in false },
         eventMonitorFactory: @escaping (NSEvent.EventTypeMask, @escaping (NSEvent) -> Void) -> Any? = { mask, handler in
@@ -97,7 +97,9 @@ public final class HoverMonitor {
         guard eventMonitor == nil else { return }
         isMonitoring = true
         eventMonitor = eventMonitorFactory([.mouseMoved]) { [weak self] event in
-            self?.handleMouseMoved(event.locationInWindow)
+            // Use NSEvent.mouseLocation for true Cocoa screen coordinates
+            let mouseLoc = NSEvent.mouseLocation
+            self?.handleMouseMoved(mouseLoc)
         }
     }
 
@@ -117,10 +119,14 @@ public final class HoverMonitor {
     public func evaluateMousePosition(
         _ point: CGPoint,
         screenHeight: CGFloat,
-        menuBarHeight: CGFloat = 30,
+        menuBarHeight: CGFloat = 32,
         isOverAppMenu: Bool = false
     ) -> Bool {
-        let isInTopArea = point.y >= (screenHeight - menuBarHeight)
+        // Handle both Cocoa (bottom-left origin) and Quartz (top-left origin) coordinates
+        let isTopInCocoa = point.y >= (screenHeight - menuBarHeight)
+        let isTopInQuartz = point.y <= menuBarHeight && point.y >= 0
+
+        let isInTopArea = isTopInCocoa || isTopInQuartz
         if !isInTopArea { return false }
         if isOverAppMenu { return false }
         return true
@@ -136,7 +142,6 @@ public final class HoverMonitor {
             isOverAppMenu: isOverMenu
         )
 
-        // Prevent collapse if a system NSMenu is currently open/tracking
         if isMenuTracking {
             updateHoverState(true)
             return

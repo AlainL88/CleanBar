@@ -1,11 +1,10 @@
 import Cocoa
 import SwiftUI
 
-/// Manages the permanent CleanBar Eye icon and the dedicated menu bar spacer item.
+/// Single clean status item controller managing the permanent CleanBar Eye icon and the floating sub-bar shelf.
 @MainActor
 public final class MenuBarSpacerController: NSObject {
-    public private(set) var controlItem: NSStatusItem?
-    public private(set) var spacerItem: NSStatusItem?
+    public private(set) var statusItem: NSStatusItem?
     public private(set) var isExpanded: Bool = false
     public let floatingShelf = FloatingShelfController()
     public var onToggle: ((Bool) -> Void)?
@@ -22,7 +21,7 @@ public final class MenuBarSpacerController: NSObject {
         self.observer = observer
         self.stateStore = stateStore
         super.init()
-        setupStatusItems()
+        setupStatusItem()
         if let obs = observer {
             floatingShelf.configure(observer: obs, onOpenPreferences: { [weak self] in
                 self?.openPreferences()
@@ -38,32 +37,19 @@ public final class MenuBarSpacerController: NSObject {
         })
     }
 
-    private func setupStatusItems() {
-        // 1. Control Status Item (The permanent 24px Eye icon)
-        let control = NSStatusBar.system.statusItem(withLength: 24.0)
-        if let button = control.button {
-            let image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: "CleanBar")
+    private func setupStatusItem() {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let button = item.button {
+            let symbolConfig = NSImage.SymbolConfiguration(pointSize: 14.0, weight: .medium)
+            let image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: "CleanBar")?.withSymbolConfiguration(symbolConfig)
             image?.isTemplate = true
             button.image = image
             button.imagePosition = .imageOnly
-            button.imageScaling = .scaleProportionallyDown
             button.target = self
             button.action = #selector(handleStatusItemClick(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
-        control.length = 24.0
-        self.controlItem = control
-
-        // 2. Spacer Status Item (Invisible variable length spacer to the left of the Eye)
-        let spacer = NSStatusBar.system.statusItem(withLength: 0.0)
-        if let spacerButton = spacer.button {
-            spacerButton.image = nil
-            spacerButton.title = ""
-            spacerButton.isTransparent = true
-        }
-        spacer.length = 0.0
-        spacer.isVisible = false
-        self.spacerItem = spacer
+        self.statusItem = item
     }
 
     @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
@@ -75,7 +61,8 @@ public final class MenuBarSpacerController: NSObject {
         if event.type == .rightMouseUp || event.modifierFlags.contains(.control) {
             showContextMenu(sender)
         } else {
-            openPreferences()
+            // Left click toggles the floating shelf
+            toggleExpansion()
         }
     }
 
@@ -95,13 +82,13 @@ public final class MenuBarSpacerController: NSObject {
         quitItem.target = self
         menu.addItem(quitItem)
 
-        controlItem?.menu = menu
-        controlItem?.button?.performClick(nil)
-        controlItem?.menu = nil
+        statusItem?.menu = menu
+        statusItem?.button?.performClick(nil)
+        statusItem?.menu = nil
     }
 
     @objc public func openPreferences() {
-        guard let observer = observer, let stateStore = stateStore, let button = controlItem?.button else { return }
+        guard let observer = observer, let stateStore = stateStore, let button = statusItem?.button else { return }
 
         if preferencesPopover?.isShown == true {
             preferencesPopover?.close()
@@ -128,7 +115,7 @@ public final class MenuBarSpacerController: NSObject {
     }
 
     @objc public func openOnboarding() {
-        guard let stateStore = stateStore, let button = controlItem?.button else { return }
+        guard let stateStore = stateStore, let button = statusItem?.button else { return }
 
         if preferencesPopover?.isShown == true {
             preferencesPopover?.close()
@@ -158,57 +145,24 @@ public final class MenuBarSpacerController: NSObject {
         onToggle?(isExpanded)
     }
 
-    /// Calculates safe collapse length based on the total width of items to the left, bounded by the Notch.
-    public func calculateTargetSpacerLength() -> CGFloat {
-        guard let button = controlItem?.button,
-              let window = button.window,
-              let screen = window.screen ?? NSScreen.main else {
-            return 80.0
-        }
-
-        let eyeRightX = window.frame.maxX
-        var notchRightEdgeX: CGFloat = 400.0
-        if #available(macOS 12.0, *) {
-            if let topRightArea = screen.auxiliaryTopRightArea, topRightArea.width > 0 {
-                notchRightEdgeX = topRightArea.origin.x
-            } else if let topLeftArea = screen.auxiliaryTopLeftArea, topLeftArea.width > 0 {
-                notchRightEdgeX = topLeftArea.maxX
-            }
-        }
-
-        let distanceToNotch = max(30.0, eyeRightX - notchRightEdgeX - 10.0)
-
-        if let obs = observer, obs.totalHiddenWidth > 10.0 {
-            return min(obs.totalHiddenWidth + 10.0, distanceToNotch)
-        }
-
-        return min(80.0, distanceToNotch)
-    }
-
     public func setExpanded(_ expanded: Bool, hiddenItemsCount: Int = 0) {
-        if let button = controlItem?.button, let window = button.window {
+        if let button = statusItem?.button, let window = button.window {
             observer?.scanLeftHiddenItems(cleanBarEyeX: window.frame.minX)
         }
 
         guard self.isExpanded != expanded else { return }
         self.isExpanded = expanded
 
-        // 1. Update Eye icon (always exactly 24px)
         let symbolName = expanded ? "eye.fill" : "eye.slash"
-        let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "CleanBar")
+        let symbolConfig = NSImage.SymbolConfiguration(pointSize: 14.0, weight: .medium)
+        let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "CleanBar")?.withSymbolConfiguration(symbolConfig)
         image?.isTemplate = true
-        controlItem?.button?.image = image
+        statusItem?.button?.image = image
 
-        // 2. Update dedicated Spacer item
-        let spacerLength = expanded ? 0.0 : calculateTargetSpacerLength()
         if expanded {
-            spacerItem?.length = 0.0
-            spacerItem?.isVisible = false
-            floatingShelf.setVisible(true, relativeTo: controlItem?.button)
+            floatingShelf.setVisible(true, relativeTo: statusItem?.button)
         } else {
-            spacerItem?.length = spacerLength
-            spacerItem?.isVisible = (spacerLength > 0)
-            floatingShelf.setVisible(false, relativeTo: controlItem?.button)
+            floatingShelf.setVisible(false, relativeTo: statusItem?.button)
         }
     }
 }
