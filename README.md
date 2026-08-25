@@ -15,7 +15,6 @@
 - 🎛️ **Click-Away Preferences Popover**: Left-click the Eye icon to launch preferences; clicks outside dismiss the window automatically.
 - 🚀 **Native Launch at Login**: Modern `SMAppService` login item management with automatic `/Applications` folder validation.
 - 💻 **Hardware Notch Avoidance**: Smart layout engine that prevents status items from hiding behind physical notch hardware.
-- 📦 **App Store Ready**: Includes App Store Connect encryption compliance (`ITSAppUsesNonExemptEncryption`).
 
 ---
 
@@ -36,19 +35,12 @@
 
 ## Building & Running
 
-### Using Xcode
 ```bash
 git clone https://github.com/AlainL88/CleanBar.git
 cd CleanBar
 open CleanBar.xcodeproj
 ```
 Select the **CleanBar** scheme and hit `Cmd + R` to build and run.
-
-### Using Swift Package Manager / CLI
-```bash
-swift build -c release
-swift test
-```
 
 ---
 
