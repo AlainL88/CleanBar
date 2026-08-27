@@ -1,20 +1,26 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Clean, minimal Preferences View for CleanBar.
 public struct SettingsView: View {
     @ObservedObject public var observer: StatusBarObserver
     @StateObject private var launchAtLoginService = LaunchAtLoginService()
+    @State private var draggedID: String?
+    @State private var targetedID: String?
     public let stateStore: StateStore
     public var onShowInstructions: (() -> Void)?
+    public var onSetItemHidden: ((StatusItemModel, Bool) -> Void)?
 
     public init(
         observer: StatusBarObserver,
         stateStore: StateStore? = nil,
-        onShowInstructions: (() -> Void)? = nil
+        onShowInstructions: (() -> Void)? = nil,
+        onSetItemHidden: ((StatusItemModel, Bool) -> Void)? = nil
     ) {
         self.observer = observer
         self.stateStore = stateStore ?? observer.stateStore
         self.onShowInstructions = onShowInstructions
+        self.onSetItemHidden = onSetItemHidden
     }
 
     public var body: some View {
@@ -80,6 +86,85 @@ public struct SettingsView: View {
                         }
                         .padding(.top, 4)
                     }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(10)
+            }
+
+            // Hidden Items Management
+            if !observer.leftHiddenItems.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Hidden Items")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    Text("Toggle an item to move it to the right of the Eye (visible) or keep it hidden on the left.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    ScrollView {
+                        VStack(spacing: 6) {
+                            ForEach(observer.leftHiddenItems) { item in
+                                HStack(spacing: 8) {
+                                    Image(systemName: "line.3.horizontal")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.secondary)
+                                        .contentShape(Rectangle())
+                                        .onDrag {
+                                            draggedID = item.id
+                                            return NSItemProvider(object: item.id as NSString)
+                                        }
+                                    if let icon = item.iconImage {
+                                        Image(nsImage: icon)
+                                            .resizable()
+                                            .interpolation(.high)
+                                            .frame(width: 16, height: 16)
+                                    } else {
+                                        Image(systemName: "menubar.rectangle")
+                                            .font(.system(size: 12))
+                                    }
+                                    Text(item.subtitle.isEmpty ? item.appName : item.subtitle)
+                                        .font(.body)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                    Spacer()
+                                    Toggle("", isOn: Binding(
+                                        get: { true },
+                                        set: { newVal in onSetItemHidden?(item, newVal) }
+                                    ))
+                                    .labelsHidden()
+                                    .toggleStyle(SwitchToggleStyle(tint: .accentColor))
+                                }
+                                .padding(.vertical, 4)
+                                .padding(.horizontal, 4)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(targetedID == item.id ? Color.accentColor.opacity(0.15) : Color.clear)
+                                )
+                                .onDrop(of: [.text], isTargeted: Binding(
+                                    get: { targetedID == item.id },
+                                    set: { isT in
+                                        if isT { targetedID = item.id }
+                                        else if targetedID == item.id { targetedID = nil }
+                                    }
+                                )) { providers in
+                                    if let id = draggedID, id != item.id {
+                                        observer.moveItem(id: id, before: item.id)
+                                    }
+                                    draggedID = nil
+                                    targetedID = nil
+                                    return true
+                                }
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    // ScrollView on macOS has no intrinsic height: a maxHeight alone
+                    // collapses it to 0 inside the popover. Give it an explicit height
+                    // that fits the rows (capped so many items still scroll).
+                    .frame(height: min(200, max(36, CGFloat(observer.leftHiddenItems.count) * 30 + 8)))
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -154,6 +239,11 @@ public struct SettingsView: View {
         }
         .onAppear {
             launchAtLoginService.checkStatus()
+            NSLog("🪟 SettingsView: onAppear items=\(observer.leftHiddenItems.count)")
         }
+        .onChange(of: observer.leftHiddenItems.count) { _, count in
+            NSLog("🪟 SettingsView: items cambiato a \(count)")
+        }
+        .frame(width: 520)
     }
 }

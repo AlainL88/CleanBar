@@ -5,16 +5,22 @@ import Cocoa
 public struct FloatingShelfView: View {
     @ObservedObject public var observer: StatusBarObserver
     public var onOpenPreferences: (() -> Void)?
-    public var onItemClicked: (() -> Void)?
+    public var onItemClicked: ((StatusItemModel) -> Void)?
+    public var onItemHover: ((StatusItemModel, CGRect) -> Void)?
+    public var onHoverEnd: (() -> Void)?
 
     public init(
         observer: StatusBarObserver,
         onOpenPreferences: (() -> Void)? = nil,
-        onItemClicked: (() -> Void)? = nil
+        onItemClicked: ((StatusItemModel) -> Void)? = nil,
+        onItemHover: ((StatusItemModel, CGRect) -> Void)? = nil,
+        onHoverEnd: (() -> Void)? = nil
     ) {
         self.observer = observer
         self.onOpenPreferences = onOpenPreferences
         self.onItemClicked = onItemClicked
+        self.onItemHover = onItemHover
+        self.onHoverEnd = onHoverEnd
     }
 
     public var body: some View {
@@ -34,9 +40,17 @@ public struct FloatingShelfView: View {
                 ForEach(observer.leftHiddenItems) { item in
                     FloatingShelfStatusItemTile(
                         item: item,
-                        observer: observer,
                         onClicked: {
-                            onItemClicked?()
+                            onItemClicked?(item)
+                        },
+                        onHover: { frameInWindow in
+                            onItemHover?(item, frameInWindow)
+                        },
+                        onHoverEnd: {
+                            onHoverEnd?()
+                        },
+                        onCmdDragEnd: { delta in
+                            reorder(itemID: item.id, byDelta: delta)
                         }
                     )
                 }
@@ -59,26 +73,39 @@ public struct FloatingShelfView: View {
             .buttonStyle(.plain)
             .help("Impostazioni CleanBar")
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+    }
+
+    /// Cmd+drag a shelf tile to reorder it. Each tile is ~34pt wide + 8pt spacing,
+    /// so the horizontal drag distance maps to a number of positions to shift.
+    private func reorder(itemID: String, byDelta delta: CGFloat) {
+        let items = observer.leftHiddenItems
+        guard let fromIdx = items.firstIndex(where: { $0.id == itemID }) else { return }
+        let step = Int(round(delta / 40))
+        let toIdx = max(0, min(items.count - 1, fromIdx + step))
+        guard toIdx != fromIdx else { return }
+        observer.moveItem(id: itemID, toIndex: toIdx)
     }
 }
 
 private struct FloatingShelfStatusItemTile: View {
     let item: StatusItemModel
-    let observer: StatusBarObserver
     var onClicked: (() -> Void)?
+    var onHover: ((CGRect) -> Void)?
+    var onHoverEnd: (() -> Void)?
+    var onCmdDragEnd: ((CGFloat) -> Void)?
     @State private var isHovered: Bool = false
+    @State private var frameInWindow: CGRect = .zero
 
     var body: some View {
         Button(action: {
             onClicked?()
-            observer.triggerStatusItem(item)
         }) {
             ZStack {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: 5)
                     .fill(isHovered ? Color.primary.opacity(0.18) : Color.clear)
-                    .frame(width: max(28, item.frame.width), height: 28)
+                    .frame(width: max(24, item.frame.width), height: 22)
 
                 if let icon = item.iconImage {
                     Image(nsImage: icon)
@@ -86,19 +113,45 @@ private struct FloatingShelfStatusItemTile: View {
                         .resizable()
                         .interpolation(.high)
                         .scaledToFit()
+                        // Template glyphs take the shelf's foreground (white on the
+                        // dark material) so they never wash out.
                         .foregroundColor(.primary)
-                        .frame(width: 18, height: 18)
+                        .frame(width: 16, height: 16)
                 } else {
                     Image(systemName: "menubar.rectangle")
-                        .font(.system(size: 14))
+                        .font(.system(size: 12))
                         .foregroundColor(.primary)
                 }
             }
         }
         .buttonStyle(.plain)
-        .help(item.appName)
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { frameInWindow = geo.frame(in: .global) }
+                    .onChange(of: geo.frame(in: .global)) { _, f in frameInWindow = f }
+            }
+        )
         .onHover { hovering in
-            isHovered = hovering
+            withAnimation(.easeOut(duration: 0.08)) {
+                isHovered = hovering
+            }
+            if hovering {
+                onHover?(frameInWindow)
+            } else {
+                onHoverEnd?()
+            }
         }
+        // Cmd+drag a tile to reorder it inside the shelf (a plain click still
+        // opens the item's menu).
+        .gesture(
+            DragGesture(minimumDistance: 5)
+                .onEnded { value in
+                    // DragGesture.Value exposes no modifiers; the current event
+                    // (mouse up) still carries them.
+                    guard NSEvent.modifierFlags.contains(.command) else { return }
+                    onCmdDragEnd?(value.translation.width)
+                }
+        )
     }
 }

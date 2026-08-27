@@ -1,9 +1,16 @@
 import Cocoa
 import ApplicationServices
 
-/// `HoverMonitor` handles global mouse event monitoring and menu bar hit-testing.
-/// It detects when the cursor is over the CleanBar trigger area or the Floating Shelf panel,
-/// and prevents dismissal while interacting with context menus or hovering over the sub-bar.
+/// `HoverMonitor` handles global mouse event monitoring and hover detection for
+/// the CleanBar trigger (Eye icon) and the Floating Shelf panel.
+///
+/// Hover is **edge-triggered**: the shelf opens only when the cursor *enters*
+/// the trigger or shelf region, and closes only when the cursor *leaves* both
+/// regions (after a short grace period). A click that dismisses the shelf arms
+/// a suppression state, so the still-hovering cursor does not immediately
+/// reopen it. While a context menu is being tracked — or the user is
+/// interacting with an item's menu — the shelf is held open regardless of the
+/// cursor position.
 @MainActor
 public final class HoverMonitor {
 
@@ -18,6 +25,9 @@ public final class HoverMonitor {
     /// Indicates whether global mouse tracking is active.
     public private(set) var isMonitoring: Bool = false
 
+    /// Provider returning the current on-screen frame of the CleanBar trigger (Eye icon).
+    public var triggerFrameProvider: (() -> CGRect?)?
+
     /// Provider returning the current screen frame of the floating shelf panel.
     public var floatingPanelFrameProvider: (() -> CGRect?)?
 
@@ -29,6 +39,15 @@ public final class HoverMonitor {
             }
         }
     }
+
+    /// True while the cursor remains over the trigger/shelf after a click
+    /// dismissed the shelf, so hover cannot immediately reopen it.
+    public private(set) var isSuppressed: Bool = false
+
+    /// Until this uptime, hover is prevented from closing the shelf after it was
+    /// opened by a click (the Eye can shift as items reappear, so the cursor may
+    /// briefly not be over it — give the user time to reach the shelf).
+    private var stickyUntil: TimeInterval = 0
 
     // MARK: - Private Properties
 
@@ -43,6 +62,10 @@ public final class HoverMonitor {
     private let eventMonitorRemover: (Any) -> Void
     private var isMenuTracking: Bool = false
     private var menuObservers: [NSObjectProtocol] = []
+    /// Whether the cursor is currently inside the trigger or shelf region (edge-tracking state).
+    private var wasOverRegions: Bool = false
+    /// Last cursor position processed by `handleMouseMoved` (used for the post-menu re-check).
+    private var lastMouseLocation: CGPoint?
 
     // MARK: - Initialization
 
@@ -87,6 +110,11 @@ public final class HoverMonitor {
             queue: .main
         ) { [weak self] _ in
             self?.isMenuTracking = true
+            // A real menu interaction overrides any click-dismissal suppression.
+            self?.isSuppressed = false
+            // The shelf is now held open; mark the "over regions" bookkeeping so a
+            // later exit (even without a prior hover edge) is detected on menu end.
+            self?.wasOverRegions = true
             self?.updateHoverState(true)
         }
         menuObservers.append(beginObserver)
@@ -97,10 +125,12 @@ public final class HoverMonitor {
             queue: .main
         ) { [weak self] _ in
             self?.isMenuTracking = false
-            // Keep grace period after menu closes
+            // Keep grace period after menu closes. Use the last cursor position the
+            // monitor actually processed (falling back to a live read), so the
+            // re-check is deterministic and not dependent on a fresh global query.
             self?.debounceTimer?.invalidate()
             self?.debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
-                let mouseLoc = NSEvent.mouseLocation
+                let mouseLoc = self?.lastMouseLocation ?? NSEvent.mouseLocation
                 self?.handleMouseMoved(mouseLoc)
             }
         }
@@ -128,10 +158,15 @@ public final class HoverMonitor {
         debounceTimer?.invalidate()
         debounceTimer = nil
         isMonitoring = false
+        isSuppressed = false
+        wasOverRegions = false
     }
 
-    // MARK: - Hit-Testing & Mouse Handling
+    // MARK: - Hit-Testing
 
+    /// Legacy utility: reports whether a point lies inside the top menu bar band.
+    /// Kept for compatibility/tests; production hover detection is scoped to the
+    /// CleanBar trigger frame (see `computeIsOverTrigger`).
     public func evaluateMousePosition(
         _ point: CGPoint,
         screenHeight: CGFloat,
@@ -147,45 +182,92 @@ public final class HoverMonitor {
         return true
     }
 
+    // MARK: - Mouse Handling
+
     public func handleMouseMoved(_ location: CGPoint) {
-        let screenHeight = screenHeightProvider()
-        let isOverMenu = appMenuChecker(location)
+        lastMouseLocation = location
+        let isOverTrigger = computeIsOverTrigger(location)
+        let isOverShelf = computeIsOverShelf(location)
+        let overRegions = isOverTrigger || isOverShelf
 
-        // 1. Is mouse in top menu bar trigger area?
-        let isOverMenuBar = evaluateMousePosition(
-            location,
-            screenHeight: screenHeight,
-            menuBarHeight: menuBarHeight,
-            isOverAppMenu: isOverMenu
-        )
-
-        // 2. Is mouse inside or hovering over the Floating Shelf panel?
-        var isOverShelf = false
-        if let shelfFrame = floatingPanelFrameProvider?(), shelfFrame.width > 0, shelfFrame.height > 0 {
-            // Expand hit area slightly (8px) for effortless mouse transit
-            let expandedFrame = shelfFrame.insetBy(dx: -8, dy: -8)
-            if expandedFrame.contains(location) {
-                isOverShelf = true
-            }
-        }
-
-        // 3. Combined effective hover condition
-        let shouldBeHovered = isOverMenuBar || isOverShelf || isMenuTracking || isInteracting
-
+        // While a menu is tracked or the user is interacting with an item menu,
+        // the shelf must stay open no matter where the cursor is. Deliberately do
+        // NOT update `wasOverRegions` here: the pre-menu value must survive so a
+        // later exit is still detected.
         if isMenuTracking || isInteracting {
+            debounceTimer?.invalidate()
+            debounceTimer = nil
             updateHoverState(true)
             return
         }
 
-        debounceTimer?.invalidate()
-        let delay = shouldBeHovered ? debounceInterval : unhoverDelay
-        if delay <= 0 {
-            updateHoverState(shouldBeHovered)
-        } else {
-            debounceTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-                self?.updateHoverState(shouldBeHovered)
+        // After a click closed the shelf, ignore the trigger while the cursor is
+        // still over it so the shelf doesn't snap back open. Re-arm only once the
+        // cursor leaves both regions.
+        if isSuppressed {
+            if overRegions {
+                wasOverRegions = overRegions
+                return
+            }
+            isSuppressed = false
+        }
+
+        if overRegions && !wasOverRegions {
+            // Entered the trigger or shelf: open (edge-triggered, brief debounce).
+            debounceTimer?.invalidate()
+            debounceTimer = Timer.scheduledTimer(withTimeInterval: debounceInterval, repeats: false) { [weak self] _ in
+                self?.updateHoverState(true)
+            }
+        } else if !overRegions && wasOverRegions {
+            if ProcessInfo.processInfo.systemUptime < stickyUntil {
+                // Sticky post-click: hold the shelf open while the user reaches it.
+                debounceTimer?.invalidate()
+                debounceTimer = nil
+            } else {
+                // Left the trigger and the shelf: close after a short grace period.
+                debounceTimer?.invalidate()
+                debounceTimer = Timer.scheduledTimer(withTimeInterval: unhoverDelay, repeats: false) { [weak self] _ in
+                    self?.updateHoverState(false)
+                }
             }
         }
+        wasOverRegions = overRegions
+    }
+
+    private func computeIsOverTrigger(_ location: CGPoint) -> Bool {
+        if appMenuChecker(location) { return false }
+        guard let frame = triggerFrameProvider?(), frame.width > 0, frame.height > 0 else { return false }
+        // Generous margin so moving from the icon down to the shelf never flickers.
+        return frame.insetBy(dx: -14, dy: -12).contains(location)
+    }
+
+    private func computeIsOverShelf(_ location: CGPoint) -> Bool {
+        guard let shelfFrame = floatingPanelFrameProvider?(), shelfFrame.width > 0, shelfFrame.height > 0 else { return false }
+        // Expand hit area slightly (8px) for effortless mouse transit.
+        return shelfFrame.insetBy(dx: -8, dy: -8).contains(location)
+    }
+
+    // MARK: - Click Coordination
+
+    /// Called after the shelf was opened by a click: marks the hover state as
+    /// engaged so a subsequent mouse-exit closes the shelf normally. Hover-close is
+    /// suppressed briefly so the user has time to reach the shelf even if the Eye
+    /// shifts as the hidden items reappear.
+    public func engageHover() {
+        debounceTimer?.invalidate()
+        stickyUntil = ProcessInfo.processInfo.systemUptime + 2.0
+        isSuppressed = false
+        wasOverRegions = true
+        updateHoverState(true)
+    }
+
+    /// Called after a click dismissed the shelf: keeps it closed while the cursor
+    /// remains over the trigger/shelf, re-arming hover once the cursor leaves.
+    public func suppressHoverUntilLeave() {
+        debounceTimer?.invalidate()
+        wasOverRegions = true
+        isSuppressed = true
+        updateHoverState(false)
     }
 
     // MARK: - State Management

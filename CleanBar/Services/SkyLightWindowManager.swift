@@ -22,6 +22,7 @@ public final class SkyLightWindowManager {
 
     private func setupSkyLight() {
         guard let skyLight = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_NOW) else {
+            NSLog("🪟 SkyLight: dlopen FAILED")
             return
         }
 
@@ -30,15 +31,22 @@ public final class SkyLightWindowManager {
             let getConn = unsafeBitCast(mainConnSymbol, to: CGSMainConnectionIDFunc.self)
             self.connectionID = getConn()
             self.setWindowAlphaFunc = unsafeBitCast(setAlphaSymbol, to: SLSSetWindowAlphaFunc.self)
+            NSLog("🪟 SkyLight: OK connectionID=%u", connectionID)
+        } else {
+            NSLog("🪟 SkyLight: symbols NOT FOUND")
         }
     }
 
     /// Hides all status bar item windows located to the left of CleanBar's Eye icon.
     public func hideItemsToTheLeft(of eyeX: CGFloat) {
-        guard let setAlpha = setWindowAlphaFunc, connectionID != 0 else { return }
+        guard let setAlpha = setWindowAlphaFunc, connectionID != 0 else {
+            NSLog("🪟 hideItemsToTheLeft: func or connection NOT READY")
+            return
+        }
 
         let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
         let selfPID = ProcessInfo.processInfo.processIdentifier
+        var hiddenCount = 0
 
         for win in windowList {
             let layer = win[kCGWindowLayer as String] as? Int ?? 0
@@ -58,8 +66,10 @@ public final class SkyLightWindowManager {
             if bounds.maxX < eyeX {
                 _ = setAlpha(connectionID, winID, 0.0)
                 hiddenWindowIDs.insert(winID)
+                hiddenCount += 1
             }
         }
+        NSLog("🪟 hideItemsToTheLeft: eyeX=%.1f windows=%d hidden=%d", eyeX, windowList.count, hiddenCount)
     }
 
     /// Restores full visibility of all previously hidden status bar windows.
